@@ -163,6 +163,18 @@ export function createGatewayServer(options: CreateGatewayServerOptions): Gatewa
         entry.socket.send(encodeMessage(message));
       }
     },
+    closeConnection(connectionId, code = 4000, reason = 'gateway_close') {
+      const entry = connections.get(connectionId);
+      if (!entry) {
+        return;
+      }
+
+      if (entry.socket.readyState === WebSocket.CLOSING || entry.socket.readyState === WebSocket.CLOSED) {
+        return;
+      }
+
+      entry.socket.close(code, reason);
+    },
   };
 
   let lobbyService: LobbyService | undefined;
@@ -180,6 +192,9 @@ export function createGatewayServer(options: CreateGatewayServerOptions): Gatewa
     onRoomStopped: ({ lobbyId, reason }) => {
       lobbyService?.handleRoomStopped(lobbyId, reason);
     },
+    onRoomRuntimeStateChanged: ({ lobbyId, runtimeState }) => {
+      lobbyService?.handleRoomRuntimeStateChanged(lobbyId, runtimeState);
+    },
   });
 
   lobbyService = new LobbyService({
@@ -194,7 +209,7 @@ export function createGatewayServer(options: CreateGatewayServerOptions): Gatewa
     lobbyPasswordService: options.lobbyPasswordService,
     lobbyMaxPlayers: options.config.lobbyMaxPlayers,
     reconnectGraceMs: options.config.reconnectGraceMs,
-    tickRate: options.config.tickRate,
+      tickRate: options.config.tickRate,
   });
 
   const router = new GatewayMessageRouter(lobbyService, roomRuntimeManager);

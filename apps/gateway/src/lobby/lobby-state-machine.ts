@@ -40,7 +40,9 @@ export class LobbyStateMachine {
       hostPlayerId: host.playerId,
       phase: 'waiting',
       activeRoomId: null,
+      activeRoomRuntimeState: null,
       selectedGameId: null,
+      configuredTickRate: input.configuredTickRate,
       maxPlayers: input.maxPlayers,
       passwordHash: input.passwordHash,
       createdAtMs: input.nowMs,
@@ -234,15 +236,17 @@ export class LobbyStateMachine {
       });
     }
 
-    const notReadyPlayerIds = connectedPlayers
-      .filter((player) => !player.isReady)
-      .map((player) => player.playerId);
+    if (!input.bypassReadiness) {
+      const notReadyPlayerIds = connectedPlayers
+        .filter((player) => !player.isReady)
+        .map((player) => player.playerId);
 
-    if (notReadyPlayerIds.length > 0) {
-      throw new LobbyServiceError('not_ready', 'All connected players must be ready.', {
-        lobbyId: input.lobbyId,
-        details: { notReadyPlayerIds },
-      });
+      if (notReadyPlayerIds.length > 0) {
+        throw new LobbyServiceError('not_ready', 'All connected players must be ready.', {
+          lobbyId: input.lobbyId,
+          details: { notReadyPlayerIds },
+        });
+      }
     }
 
     lobby.phase = 'starting';
@@ -258,6 +262,7 @@ export class LobbyStateMachine {
     const lobby = this.requireLobby(lobbyId);
     lobby.phase = 'in_game';
     lobby.activeRoomId = roomId;
+    lobby.activeRoomRuntimeState = 'running';
     lobby.updatedAtMs = nowMs;
     return lobby;
   }
@@ -266,6 +271,7 @@ export class LobbyStateMachine {
     const lobby = this.requireLobby(lobbyId);
     lobby.phase = 'waiting';
     lobby.activeRoomId = null;
+    lobby.activeRoomRuntimeState = null;
     lobby.updatedAtMs = nowMs;
 
     for (const player of lobby.playersById.values()) {
@@ -279,6 +285,24 @@ export class LobbyStateMachine {
 
   public getLobby(lobbyId: string): LobbyState | undefined {
     return this.lobbies.get(lobbyId);
+  }
+
+  public setConfiguredTickRate(lobbyId: string, tickRate: number, nowMs: number): LobbyState {
+    const lobby = this.requireLobby(lobbyId);
+    lobby.configuredTickRate = tickRate;
+    lobby.updatedAtMs = nowMs;
+    return lobby;
+  }
+
+  public setActiveRoomRuntimeState(
+    lobbyId: string,
+    runtimeState: 'running' | 'paused' | null,
+    nowMs: number,
+  ): LobbyState {
+    const lobby = this.requireLobby(lobbyId);
+    lobby.activeRoomRuntimeState = runtimeState;
+    lobby.updatedAtMs = nowMs;
+    return lobby;
   }
 
   public toLobbyView(lobby: LobbyState): LobbyView {
@@ -310,7 +334,9 @@ export class LobbyStateMachine {
       hostPlayerId: lobby.hostPlayerId,
       phase: lobby.phase,
       activeRoomId: lobby.activeRoomId,
+      activeRoomRuntimeState: lobby.activeRoomRuntimeState,
       selectedGameId: lobby.selectedGameId,
+      configuredTickRate: lobby.configuredTickRate,
       requiresPassword: lobby.passwordHash !== null,
       maxPlayers: lobby.maxPlayers,
       players,

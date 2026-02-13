@@ -26,6 +26,7 @@ describe('gateway lobby discovery HTTP API', () => {
       nickname: 'OpenHost',
       lobbyName: 'Open Lobby',
       maxPlayers: 4,
+      configuredTickRate: 20,
       passwordHash: null,
       nowMs: 1000,
     });
@@ -44,6 +45,7 @@ describe('gateway lobby discovery HTTP API', () => {
       nickname: 'ProtectedHost',
       lobbyName: 'Protected Lobby',
       maxPlayers: 4,
+      configuredTickRate: 20,
       passwordHash: passwordService.hashPassword('secret-pass'),
       nowMs: 1200,
     });
@@ -55,6 +57,7 @@ describe('gateway lobby discovery HTTP API', () => {
       nickname: 'InGameHost',
       lobbyName: 'In Game Lobby',
       maxPlayers: 4,
+      configuredTickRate: 20,
       passwordHash: null,
       nowMs: 1300,
     });

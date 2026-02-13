@@ -32,6 +32,9 @@ export default function HomePage(): React.JSX.Element {
           <Button asChild variant="outline" size="sm">
             <Link href="/stats/me">My Stats</Link>
           </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/admin">Admin</Link>
+          </Button>
         </div>
       </section>
 

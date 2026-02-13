@@ -92,6 +92,10 @@ class FakeTransport implements GatewayTransport {
     // Not used by RoomRuntimeManager.
   }
 
+  public closeConnection(_connectionId: string): void {
+    // Not used by RoomRuntimeManager.
+  }
+
   public findByType<TType extends ServerMessage['type']>(
     connectionId: string,
     type: TType,
@@ -453,6 +457,82 @@ describe('RoomRuntimeManager', () => {
         },
       }),
     ).toThrow(LobbyServiceError);
+  });
+
+  it('supports admin pause/resume controls with monitor state updates', () => {
+    const harness = setupHarness();
+    harness.connectionRegistry.setContext({
+      connectionId: 'conn-1',
+      lobbyId: 'lobby-1',
+      playerId: 'player-1',
+      guestId: 'guest-1',
+      nickname: 'Host',
+    });
+
+    harness.manager.handleGameMessage('conn-1', {
+      v: 1,
+      type: 'game.join',
+      payload: {
+        roomId: harness.roomId,
+        playerId: 'player-1',
+      },
+    });
+
+    harness.manager.pauseRoom('lobby-1', harness.roomId);
+    expect(harness.scheduler.isRunning()).toBe(false);
+    expect(harness.manager.getLobbyMonitorState('lobby-1')?.runtimeState).toBe('paused');
+
+    harness.manager.resumeRoom('lobby-1', harness.roomId);
+    expect(harness.scheduler.isRunning()).toBe(true);
+    expect(harness.manager.getLobbyMonitorState('lobby-1')?.runtimeState).toBe('running');
+  });
+
+  it('force-ends active room and persists admin_forced results', () => {
+    const harness = setupHarness();
+    harness.connectionRegistry.setContext({
+      connectionId: 'conn-1',
+      lobbyId: 'lobby-1',
+      playerId: 'player-1',
+      guestId: 'guest-1',
+      nickname: 'Host',
+    });
+    harness.connectionRegistry.setContext({
+      connectionId: 'conn-2',
+      lobbyId: 'lobby-1',
+      playerId: 'player-2',
+      guestId: 'guest-2',
+      nickname: 'Guest',
+    });
+
+    harness.manager.handleGameMessage('conn-1', {
+      v: 1,
+      type: 'game.join',
+      payload: {
+        roomId: harness.roomId,
+        playerId: 'player-1',
+      },
+    });
+    harness.manager.handleGameMessage('conn-2', {
+      v: 1,
+      type: 'game.join',
+      payload: {
+        roomId: harness.roomId,
+        playerId: 'player-2',
+      },
+    });
+
+    harness.manager.forceEndRoom('lobby-1', harness.roomId);
+
+    expect(harness.matchPersistenceService.calls).toHaveLength(1);
+    expect(harness.matchPersistenceService.calls[0]?.endReason).toBe('admin_forced');
+    expect(harness.roomStopCalls).toEqual([
+      {
+        lobbyId: 'lobby-1',
+        roomId: harness.roomId,
+        reason: 'admin_forced',
+        stoppedAtMs: 1_700_000_000_000,
+      },
+    ]);
   });
 
   it('persists game-over results when runtime ends a round', () => {

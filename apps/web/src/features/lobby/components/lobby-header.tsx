@@ -13,7 +13,9 @@ export interface LobbyHeaderProps {
   lobbyName: string;
   phase: string;
   activeRoomId: string | null;
+  activeRoomRuntimeState: 'running' | 'paused' | null;
   selectedGameId: string | null;
+  configuredTickRate: number;
   requiresPassword: boolean;
   maxPlayers: number;
   playerCount: number;
@@ -45,6 +47,8 @@ export function LobbyHeader(props: LobbyHeaderProps): React.JSX.Element {
       <CardContent className="flex flex-wrap items-center gap-2 text-sm">
         <span className="text-muted-foreground">Selected game</span>
         <Badge variant="secondary">{selectedGameLabel}</Badge>
+        <span className="text-muted-foreground">Tick Rate</span>
+        <Badge variant="outline">{props.configuredTickRate} TPS</Badge>
         {props.requiresPassword ? (
           <>
             <span className="text-muted-foreground">Access</span>
@@ -60,6 +64,10 @@ export function LobbyHeader(props: LobbyHeaderProps): React.JSX.Element {
           <>
             <span className="text-muted-foreground">Active room</span>
             <Badge variant="outline">{props.activeRoomId}</Badge>
+            <span className="text-muted-foreground">Runtime</span>
+            <Badge variant={props.activeRoomRuntimeState === 'paused' ? 'warning' : 'success'}>
+              {props.activeRoomRuntimeState ?? 'running'}
+            </Badge>
           </>
         ) : null}
       </CardContent>

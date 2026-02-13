@@ -1,5 +1,15 @@
 import {
   PROTOCOL_VERSION,
+  type LobbyAdminAction,
+  type LobbyAdminActionResultMessage,
+  type LobbyAdminKickMessage,
+  type LobbyAdminMonitorRequestMessage,
+  type LobbyAdminRoomForceEndMessage,
+  type LobbyAdminRoomPauseMessage,
+  type LobbyAdminRoomResumeMessage,
+  type LobbyAdminRoomStopMessage,
+  type LobbyAdminStartForceMessage,
+  type LobbyAdminTickRateSetMessage,
   type LobbyChatSendMessage,
   type LobbyClientMessage,
   type LobbyCreateMessage,
@@ -21,7 +31,7 @@ import type {
   SessionTokenService,
 } from '../types.js';
 import type { LobbyStateMachine } from './lobby-state-machine.js';
-import type { RoomManager } from '../room/room-manager.js';
+import type { RoomManager, RoomRecord } from '../room/room-manager.js';
 
 interface LobbyServiceDependencies {
   stateMachine: LobbyStateMachine;
@@ -60,7 +70,7 @@ export class LobbyService {
   private readonly lobbyPasswordService: LobbyPasswordService;
   private readonly lobbyMaxPlayers: number;
   private readonly reconnectGraceMs: number;
-  private readonly tickRate: number;
+  private readonly defaultTickRate: number;
   private readonly setTimer: (fn: () => void, ms: number) => NodeJS.Timeout;
   private readonly clearTimer: (timeout: NodeJS.Timeout) => void;
   private readonly evictionTimers = new Map<string, NodeJS.Timeout>();
@@ -77,7 +87,7 @@ export class LobbyService {
     this.lobbyPasswordService = dependencies.lobbyPasswordService;
     this.lobbyMaxPlayers = dependencies.lobbyMaxPlayers;
     this.reconnectGraceMs = dependencies.reconnectGraceMs;
-    this.tickRate = dependencies.tickRate;
+    this.defaultTickRate = dependencies.tickRate;
     this.setTimer = dependencies.setTimer ?? setTimeout;
     this.clearTimer = dependencies.clearTimer ?? clearTimeout;
   }
@@ -99,6 +109,7 @@ export class LobbyService {
       nickname: message.payload.nickname,
       lobbyName: message.payload.lobbyName ?? 'LAN Session',
       maxPlayers: this.lobbyMaxPlayers,
+      configuredTickRate: this.defaultTickRate,
       passwordHash,
       nowMs,
     });
@@ -219,6 +230,7 @@ export class LobbyService {
 
     const nowMs = this.clock.nowMs();
     this.cancelEviction(binding.playerId);
+    this.roomRuntimeManager.evictPlayer(binding.lobbyId, binding.playerId);
     const nextLobby = this.stateMachine.removePlayer(lobbyId, binding.playerId, nowMs);
     this.connectionRegistry.clear(connectionId);
 
@@ -302,42 +314,162 @@ export class LobbyService {
       nowMs,
     });
 
-    const connectedParticipants = [...lobby.playersById.values()]
-      .filter((player) => player.isConnected)
-      .map((player) => ({
-        playerId: player.playerId,
-        guestId: player.guestId,
-        nickname: player.nickname,
-      }));
+    this.startLobbyRoom(lobby.lobbyId, gameId, nowMs);
+  }
 
-    const room = this.roomManager.createRoom({
-      matchId: this.idGenerator.next('match'),
-      lobbyId: lobby.lobbyId,
-      gameId,
-      tickRate: this.tickRate,
-      createdAtMs: nowMs,
-      startedAtMs: nowMs,
-      participants: connectedParticipants,
+  public handleAdminMonitorRequest(connectionId: string, message: LobbyAdminMonitorRequestMessage): void {
+    this.requireHostBinding(connectionId, message.payload.lobbyId, message.payload.requestedByPlayerId);
+
+    this.transport.sendToConnection(connectionId, {
+      v: PROTOCOL_VERSION,
+      type: 'lobby.admin.monitor.state',
+      payload: this.buildAdminMonitorPayload(message.payload.lobbyId),
+    });
+  }
+
+  public handleAdminTickRateSet(connectionId: string, message: LobbyAdminTickRateSetMessage): void {
+    this.requireHostBinding(connectionId, message.payload.lobbyId, message.payload.requestedByPlayerId);
+
+    this.stateMachine.setConfiguredTickRate(
+      message.payload.lobbyId,
+      message.payload.tickRate,
+      this.clock.nowMs(),
+    );
+
+    this.broadcastLobbyState(message.payload.lobbyId);
+    this.sendAdminActionResult(connectionId, {
+      lobbyId: message.payload.lobbyId,
+      action: 'tick_rate.set',
+      status: 'accepted',
+      requestedByPlayerId: message.payload.requestedByPlayerId,
+      tickRate: message.payload.tickRate,
+      message: `Configured tick rate set to ${message.payload.tickRate}.`,
+    });
+  }
+
+  public handleAdminKick(connectionId: string, message: LobbyAdminKickMessage): void {
+    this.requireHostBinding(connectionId, message.payload.lobbyId, message.payload.requestedByPlayerId);
+
+    if (message.payload.requestedByPlayerId === message.payload.targetPlayerId) {
+      throw new LobbyServiceError('invalid_state', 'Host cannot kick themselves.', {
+        lobbyId: message.payload.lobbyId,
+      });
+    }
+
+    const lobby = this.requireLobby(message.payload.lobbyId);
+    const targetPlayer = lobby.playersById.get(message.payload.targetPlayerId);
+    if (!targetPlayer) {
+      throw new LobbyServiceError('invalid_state', 'Kick target is not in this lobby.', {
+        lobbyId: message.payload.lobbyId,
+      });
+    }
+
+    const nowMs = this.clock.nowMs();
+    this.cancelEviction(message.payload.targetPlayerId);
+    this.roomRuntimeManager.evictPlayer(message.payload.lobbyId, message.payload.targetPlayerId);
+
+    const targetConnection = this.connectionRegistry.findByPlayerId(message.payload.targetPlayerId);
+    this.stateMachine.removePlayer(message.payload.lobbyId, message.payload.targetPlayerId, nowMs);
+
+    if (targetConnection) {
+      this.connectionRegistry.clear(targetConnection.connectionId);
+      this.transport.closeConnection(targetConnection.connectionId, 4001, 'kicked_by_host');
+    }
+
+    this.broadcastLobbyState(message.payload.lobbyId);
+    this.sendAdminActionResult(connectionId, {
+      lobbyId: message.payload.lobbyId,
+      action: 'kick',
+      status: 'accepted',
+      requestedByPlayerId: message.payload.requestedByPlayerId,
+      targetPlayerId: message.payload.targetPlayerId,
+      ...(message.payload.reason ? { reason: message.payload.reason } : {}),
+      message: `Removed ${targetPlayer.nickname} from lobby.`,
+    });
+  }
+
+  public handleAdminStartForce(connectionId: string, message: LobbyAdminStartForceMessage): void {
+    this.requireHostBinding(connectionId, message.payload.lobbyId, message.payload.requestedByPlayerId);
+
+    const nowMs = this.clock.nowMs();
+    const { lobby, gameId } = this.stateMachine.requestStart({
+      lobbyId: message.payload.lobbyId,
+      requestedByPlayerId: message.payload.requestedByPlayerId,
+      bypassReadiness: true,
+      nowMs,
     });
 
-    this.roomRuntimeManager.startRoomRuntime(room);
-    this.stateMachine.setInGame(lobby.lobbyId, room.roomId, nowMs);
+    const room = this.startLobbyRoom(lobby.lobbyId, gameId, nowMs);
 
-    const startAccepted: LobbyServerMessage = {
-      v: PROTOCOL_VERSION,
-      type: 'lobby.start.accepted',
-      payload: {
-        lobbyId: lobby.lobbyId,
-        roomId: room.roomId,
-        gameId: room.gameId,
-        seed: room.seed,
-        tickRate: room.tickRate,
-        startedAtMs: nowMs,
-      },
-    };
+    this.sendAdminActionResult(connectionId, {
+      lobbyId: message.payload.lobbyId,
+      action: 'start.force',
+      status: 'accepted',
+      requestedByPlayerId: message.payload.requestedByPlayerId,
+      roomId: room.roomId,
+      message: 'Match force-started by host.',
+    });
+  }
 
-    this.transport.broadcastToLobby(lobby.lobbyId, startAccepted);
-    this.broadcastLobbyState(lobby.lobbyId);
+  public handleAdminRoomPause(connectionId: string, message: LobbyAdminRoomPauseMessage): void {
+    this.requireHostBinding(connectionId, message.payload.lobbyId, message.payload.requestedByPlayerId);
+    this.ensureActiveRoom(message.payload.lobbyId, message.payload.roomId);
+
+    this.roomRuntimeManager.pauseRoom(message.payload.lobbyId, message.payload.roomId);
+    this.sendAdminActionResult(connectionId, {
+      lobbyId: message.payload.lobbyId,
+      action: 'room.pause',
+      status: 'accepted',
+      requestedByPlayerId: message.payload.requestedByPlayerId,
+      roomId: message.payload.roomId,
+      message: 'Room runtime paused.',
+    });
+  }
+
+  public handleAdminRoomResume(connectionId: string, message: LobbyAdminRoomResumeMessage): void {
+    this.requireHostBinding(connectionId, message.payload.lobbyId, message.payload.requestedByPlayerId);
+    this.ensureActiveRoom(message.payload.lobbyId, message.payload.roomId);
+
+    this.roomRuntimeManager.resumeRoom(message.payload.lobbyId, message.payload.roomId);
+    this.sendAdminActionResult(connectionId, {
+      lobbyId: message.payload.lobbyId,
+      action: 'room.resume',
+      status: 'accepted',
+      requestedByPlayerId: message.payload.requestedByPlayerId,
+      roomId: message.payload.roomId,
+      message: 'Room runtime resumed.',
+    });
+  }
+
+  public handleAdminRoomStop(connectionId: string, message: LobbyAdminRoomStopMessage): void {
+    this.requireHostBinding(connectionId, message.payload.lobbyId, message.payload.requestedByPlayerId);
+    this.ensureActiveRoom(message.payload.lobbyId, message.payload.roomId);
+
+    this.roomRuntimeManager.stopRoom(message.payload.lobbyId, message.payload.roomId, 'admin_stop');
+    this.sendAdminActionResult(connectionId, {
+      lobbyId: message.payload.lobbyId,
+      action: 'room.stop',
+      status: 'accepted',
+      requestedByPlayerId: message.payload.requestedByPlayerId,
+      roomId: message.payload.roomId,
+      ...(message.payload.reason ? { reason: message.payload.reason } : {}),
+      message: message.payload.reason ? `Room stopped: ${message.payload.reason}` : 'Room stopped.',
+    });
+  }
+
+  public handleAdminRoomForceEnd(connectionId: string, message: LobbyAdminRoomForceEndMessage): void {
+    this.requireHostBinding(connectionId, message.payload.lobbyId, message.payload.requestedByPlayerId);
+    this.ensureActiveRoom(message.payload.lobbyId, message.payload.roomId);
+
+    this.roomRuntimeManager.forceEndRoom(message.payload.lobbyId, message.payload.roomId);
+    this.sendAdminActionResult(connectionId, {
+      lobbyId: message.payload.lobbyId,
+      action: 'room.force_end',
+      status: 'accepted',
+      requestedByPlayerId: message.payload.requestedByPlayerId,
+      roomId: message.payload.roomId,
+      message: 'Room force-ended and persisted as admin_forced.',
+    });
   }
 
   public handleDisconnect(connectionId: string): void {
@@ -353,13 +485,27 @@ export class LobbyService {
     this.scheduleEviction(context.lobbyId, context.playerId);
   }
 
+  public handleRoomRuntimeStateChanged(
+    lobbyId: string,
+    runtimeState: 'running' | 'paused' | 'stopped',
+  ): void {
+    const lobby = this.stateMachine.getLobby(lobbyId);
+    if (!lobby || lobby.activeRoomId === null) {
+      return;
+    }
+
+    const lobbyRuntimeState = runtimeState === 'stopped' ? null : runtimeState;
+    this.stateMachine.setActiveRoomRuntimeState(lobbyId, lobbyRuntimeState, this.clock.nowMs());
+    this.broadcastLobbyState(lobbyId);
+  }
+
   public handleRoomStopped(lobbyId: string, reason: string): void {
     const lobby = this.stateMachine.getLobby(lobbyId);
     if (!lobby) {
       return;
     }
 
-    if (reason !== 'game_over' && reason !== 'idle_timeout') {
+    if (reason !== 'game_over' && reason !== 'idle_timeout' && reason !== 'admin_stop' && reason !== 'admin_forced') {
       return;
     }
 
@@ -442,6 +588,89 @@ export class LobbyService {
     };
   }
 
+  private requireHostBinding(
+    connectionId: string,
+    lobbyId: string,
+    requestedByPlayerId: string,
+  ): BoundConnection {
+    const binding = this.requireBoundConnection(connectionId);
+    if (binding.lobbyId !== lobbyId || binding.playerId !== requestedByPlayerId) {
+      throw new LobbyServiceError('unauthorized', 'Admin requester does not match bound connection.', {
+        lobbyId,
+      });
+    }
+
+    const lobby = this.requireLobby(lobbyId);
+    const player = lobby.playersById.get(requestedByPlayerId);
+    if (!player || !player.isHost) {
+      throw new LobbyServiceError('unauthorized', 'Only host can perform admin actions.', {
+        lobbyId,
+      });
+    }
+
+    return binding;
+  }
+
+  private requireLobby(lobbyId: string) {
+    const lobby = this.stateMachine.getLobby(lobbyId);
+    if (!lobby) {
+      throw new LobbyServiceError('lobby_not_found', 'Lobby was not found.', { lobbyId });
+    }
+
+    return lobby;
+  }
+
+  private ensureActiveRoom(lobbyId: string, roomId: string): void {
+    const lobby = this.requireLobby(lobbyId);
+    if (lobby.phase !== 'in_game' || !lobby.activeRoomId || lobby.activeRoomId !== roomId) {
+      throw new LobbyServiceError('invalid_state', 'Requested room is not currently active for this lobby.', {
+        lobbyId,
+      });
+    }
+  }
+
+  private startLobbyRoom(lobbyId: string, gameId: string, nowMs: number): RoomRecord {
+    const lobby = this.requireLobby(lobbyId);
+    const connectedParticipants = [...lobby.playersById.values()]
+      .filter((player) => player.isConnected)
+      .map((player) => ({
+        playerId: player.playerId,
+        guestId: player.guestId,
+        nickname: player.nickname,
+      }));
+
+    const room = this.roomManager.createRoom({
+      matchId: this.idGenerator.next('match'),
+      lobbyId: lobby.lobbyId,
+      gameId,
+      tickRate: lobby.configuredTickRate,
+      createdAtMs: nowMs,
+      startedAtMs: nowMs,
+      participants: connectedParticipants,
+    });
+
+    this.roomRuntimeManager.startRoomRuntime(room);
+    this.stateMachine.setInGame(lobby.lobbyId, room.roomId, nowMs);
+
+    const startAccepted: LobbyServerMessage = {
+      v: PROTOCOL_VERSION,
+      type: 'lobby.start.accepted',
+      payload: {
+        lobbyId: lobby.lobbyId,
+        roomId: room.roomId,
+        gameId: room.gameId,
+        seed: room.seed,
+        tickRate: room.tickRate,
+        startedAtMs: nowMs,
+      },
+    };
+
+    this.transport.broadcastToLobby(lobby.lobbyId, startAccepted);
+    this.broadcastLobbyState(lobby.lobbyId);
+
+    return room;
+  }
+
   private sendAuthIssued(connectionId: string, lobbyId: string, playerId: string, guestId: string): void {
     const token = this.sessionTokenService.issueSessionToken({
       lobbyId,
@@ -462,6 +691,67 @@ export class LobbyService {
     };
 
     this.transport.sendToConnection(connectionId, message);
+  }
+
+  private buildAdminMonitorPayload(lobbyId: string) {
+    const lobby = this.requireLobby(lobbyId);
+    let connectedPlayerCount = 0;
+    for (const player of lobby.playersById.values()) {
+      if (player.isConnected) {
+        connectedPlayerCount += 1;
+      }
+    }
+
+    const room = this.roomRuntimeManager.getLobbyMonitorState(lobbyId);
+
+    return {
+      lobbyId: lobby.lobbyId,
+      generatedAtMs: this.clock.nowMs(),
+      hostPlayerId: lobby.hostPlayerId,
+      phase: lobby.phase,
+      activeRoomId: lobby.activeRoomId,
+      activeRoomRuntimeState: lobby.activeRoomRuntimeState,
+      configuredTickRate: lobby.configuredTickRate,
+      connectedPlayerCount,
+      totalPlayerCount: lobby.playersById.size,
+      room,
+    };
+  }
+
+  private sendAdminActionResult(
+    connectionId: string,
+    input: {
+      lobbyId: string;
+      action: LobbyAdminAction;
+      status: 'accepted' | 'rejected';
+      requestedByPlayerId: string;
+      roomId?: string;
+      targetPlayerId?: string;
+      tickRate?: number;
+      reason?: string;
+      message?: string;
+      details?: unknown;
+    },
+  ): void {
+    const payload: LobbyAdminActionResultMessage['payload'] = {
+      lobbyId: input.lobbyId,
+      action: input.action,
+      status: input.status,
+      requestedByPlayerId: input.requestedByPlayerId,
+      atMs: this.clock.nowMs(),
+      ...(input.roomId ? { roomId: input.roomId } : {}),
+      ...(input.targetPlayerId ? { targetPlayerId: input.targetPlayerId } : {}),
+      ...(input.tickRate ? { tickRate: input.tickRate } : {}),
+      ...(input.reason ? { reason: input.reason } : {}),
+      ...(input.message ? { message: input.message } : {}),
+      ...(input.details !== undefined ? { details: input.details } : {}),
+    };
+
+    this.transport.sendToConnection(connectionId, {
+      v: PROTOCOL_VERSION,
+      type: 'lobby.admin.action.result',
+      payload,
+    });
   }
 
   private broadcastLobbyState(lobbyId: string): void {
@@ -562,6 +852,30 @@ export class LobbyService {
         return;
       case 'lobby.start.request':
         this.handleStartRequest(connectionId, message);
+        return;
+      case 'lobby.admin.monitor.request':
+        this.handleAdminMonitorRequest(connectionId, message);
+        return;
+      case 'lobby.admin.tick_rate.set':
+        this.handleAdminTickRateSet(connectionId, message);
+        return;
+      case 'lobby.admin.kick':
+        this.handleAdminKick(connectionId, message);
+        return;
+      case 'lobby.admin.start.force':
+        this.handleAdminStartForce(connectionId, message);
+        return;
+      case 'lobby.admin.room.pause':
+        this.handleAdminRoomPause(connectionId, message);
+        return;
+      case 'lobby.admin.room.resume':
+        this.handleAdminRoomResume(connectionId, message);
+        return;
+      case 'lobby.admin.room.stop':
+        this.handleAdminRoomStop(connectionId, message);
+        return;
+      case 'lobby.admin.room.force_end':
+        this.handleAdminRoomForceEnd(connectionId, message);
         return;
     }
   }

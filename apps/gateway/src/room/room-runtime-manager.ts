@@ -19,10 +19,13 @@ import type {
   ConnectionRegistry,
   GatewayConnectionContext,
   GatewayTransport,
+  LobbyMonitorRoomState,
   MatchPersistenceService,
 } from '../types.js';
 import type { ModuleRegistry } from './module-registry.js';
 import type { RoomManager, RoomRecord } from './room-manager.js';
+
+type RuntimeState = 'running' | 'paused' | 'stopped';
 
 interface ActiveRoomRuntime {
   room: RoomRecord;
@@ -30,9 +33,12 @@ interface ActiveRoomRuntime {
   joinedConnectionIds: Set<string>;
   connectedConnectionIds: Set<string>;
   spectatorConnectionIds: Set<string>;
+  eliminationTickByPlayerId: Map<string, number>;
+  aliveByPlayerId: Map<string, boolean>;
   pendingGameOverEndedAtMs: number | undefined;
   idleTimeout: NodeJS.Timeout | undefined;
   stopped: boolean;
+  runtimeState: RuntimeState;
 }
 
 interface RoomRuntimeManagerDependencies {
@@ -51,9 +57,23 @@ interface RoomRuntimeManagerDependencies {
     reason: string;
     stoppedAtMs: number;
   }) => void) | undefined;
+  onRoomRuntimeStateChanged?: ((input: {
+    lobbyId: string;
+    roomId: string;
+    runtimeState: RuntimeState;
+    atMs: number;
+  }) => void) | undefined;
   createScheduler?: () => TickScheduler;
   setTimer?: (fn: () => void, ms: number) => NodeJS.Timeout;
   clearTimer?: (timeout: NodeJS.Timeout) => void;
+}
+
+interface PersistableResult {
+  playerId: string;
+  rank: number;
+  score: number;
+  alive: boolean;
+  eliminatedAtTick: number | null;
 }
 
 function isValidGameResultEntry(value: unknown): value is { playerId: string; rank: number; score?: number } {
@@ -82,6 +102,51 @@ function isValidGameResultEntry(value: unknown): value is { playerId: string; ra
   return true;
 }
 
+function isPlayerEliminatedEvent(value: unknown): value is { kind: 'player.eliminated'; playerId: string } {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
+  const candidate = value as {
+    kind?: unknown;
+    playerId?: unknown;
+  };
+
+  return candidate.kind === 'player.eliminated' && typeof candidate.playerId === 'string' && candidate.playerId.length > 0;
+}
+
+function isPlayerSnapshotArray(value: unknown): value is Array<{ playerId: string; alive: boolean }> {
+  if (!Array.isArray(value)) {
+    return false;
+  }
+
+  for (const item of value) {
+    if (typeof item !== 'object' || item === null) {
+      return false;
+    }
+
+    const candidate = item as {
+      playerId?: unknown;
+      alive?: unknown;
+    };
+
+    if (typeof candidate.playerId !== 'string' || typeof candidate.alive !== 'boolean') {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function getPlayersFromSnapshot(snapshot: unknown): Array<{ playerId: string; alive: boolean }> {
+  if (typeof snapshot !== 'object' || snapshot === null || !('players' in snapshot)) {
+    return [];
+  }
+
+  const players = (snapshot as { players?: unknown }).players;
+  return isPlayerSnapshotArray(players) ? players : [];
+}
+
 export class RoomRuntimeManager {
   private readonly roomManager: RoomManager;
   private readonly moduleRegistry: ModuleRegistry;
@@ -93,6 +158,7 @@ export class RoomRuntimeManager {
   private readonly bombermanMovementModel: BombermanMovementModel;
   private readonly roomIdleTimeoutMs: number;
   private readonly onRoomStopped: RoomRuntimeManagerDependencies['onRoomStopped'];
+  private readonly onRoomRuntimeStateChanged: RoomRuntimeManagerDependencies['onRoomRuntimeStateChanged'];
   private readonly createScheduler: (() => TickScheduler) | undefined;
   private readonly setTimer: (fn: () => void, ms: number) => NodeJS.Timeout;
   private readonly clearTimer: (timeout: NodeJS.Timeout) => void;
@@ -109,6 +175,7 @@ export class RoomRuntimeManager {
     this.bombermanMovementModel = dependencies.bombermanMovementModel;
     this.roomIdleTimeoutMs = dependencies.roomIdleTimeoutMs;
     this.onRoomStopped = dependencies.onRoomStopped;
+    this.onRoomRuntimeStateChanged = dependencies.onRoomRuntimeStateChanged;
     this.createScheduler = dependencies.createScheduler;
     this.setTimer = dependencies.setTimer ?? setTimeout;
     this.clearTimer = dependencies.clearTimer ?? clearTimeout;
@@ -152,6 +219,11 @@ export class RoomRuntimeManager {
         ...(scheduler ? { scheduler } : {}),
         callbacks: {
           onSnapshot: (emission): void => {
+            const snapshotPlayers = getPlayersFromSnapshot(emission.snapshot);
+            for (const player of snapshotPlayers) {
+              runtimeEntry.aliveByPlayerId.set(player.playerId, player.alive);
+            }
+
             this.broadcastToSubscribers(runtimeEntry, {
               v: PROTOCOL_VERSION,
               type: 'game.snapshot',
@@ -165,6 +237,11 @@ export class RoomRuntimeManager {
           },
 
           onEvent: (emission): void => {
+            if (isPlayerEliminatedEvent(emission.event) && !runtimeEntry.eliminationTickByPlayerId.has(emission.event.playerId)) {
+              runtimeEntry.eliminationTickByPlayerId.set(emission.event.playerId, emission.tick);
+              runtimeEntry.aliveByPlayerId.set(emission.event.playerId, false);
+            }
+
             this.broadcastToSubscribers(runtimeEntry, {
               v: PROTOCOL_VERSION,
               type: 'game.event',
@@ -201,16 +278,7 @@ export class RoomRuntimeManager {
               ? emission.results.filter((item) => isValidGameResultEntry(item))
               : [];
 
-            this.broadcastToSubscribers(runtimeEntry, {
-              v: PROTOCOL_VERSION,
-              type: 'game.over',
-              payload: {
-                roomId: emission.roomId,
-                gameId: emission.gameId,
-                endedAtMs,
-                results,
-              },
-            });
+            this.broadcastGameOver(runtimeEntry, endedAtMs, results);
           },
 
           onStopped: (emission): void => {
@@ -221,13 +289,17 @@ export class RoomRuntimeManager {
       joinedConnectionIds: new Set(),
       connectedConnectionIds: new Set(),
       spectatorConnectionIds: new Set(),
+      eliminationTickByPlayerId: new Map(),
+      aliveByPlayerId: new Map(room.playerIds.map((playerId) => [playerId, true])),
       pendingGameOverEndedAtMs: undefined,
       idleTimeout: undefined,
       stopped: false,
+      runtimeState: 'running',
     };
 
     this.runtimesByRoomId.set(room.roomId, runtimeEntry);
     runtimeEntry.runtime.start();
+    this.setRuntimeState(runtimeEntry, 'running');
   }
 
   public handleGameMessage(connectionId: string, message: GameClientMessage): void {
@@ -269,6 +341,116 @@ export class RoomRuntimeManager {
     this.evaluateIdleState(runtimeEntry);
   }
 
+  public pauseRoom(lobbyId: string, roomId: string): void {
+    const runtimeEntry = this.requireControllableRuntime(lobbyId, roomId);
+    runtimeEntry.runtime.pause();
+    this.clearIdleTimer(runtimeEntry);
+    this.setRuntimeState(runtimeEntry, 'paused');
+  }
+
+  public resumeRoom(lobbyId: string, roomId: string): void {
+    const runtimeEntry = this.requireControllableRuntime(lobbyId, roomId);
+    runtimeEntry.runtime.resume();
+    this.setRuntimeState(runtimeEntry, runtimeEntry.runtime.isPaused() ? 'paused' : 'running');
+    this.evaluateIdleState(runtimeEntry);
+  }
+
+  public stopRoom(lobbyId: string, roomId: string, reason = 'admin_stop'): void {
+    const runtimeEntry = this.requireControllableRuntime(lobbyId, roomId);
+    runtimeEntry.runtime.stop(reason);
+  }
+
+  public forceEndRoom(lobbyId: string, roomId: string): void {
+    const runtimeEntry = this.requireControllableRuntime(lobbyId, roomId);
+    const endedAtMs = this.clock.nowMs();
+    runtimeEntry.pendingGameOverEndedAtMs = endedAtMs;
+
+    const persistableResults = this.buildForcedResults(runtimeEntry);
+
+    try {
+      this.matchPersistenceService.persistCompletedMatch({
+        room: runtimeEntry.room,
+        endedAtMs,
+        endReason: 'admin_forced',
+        results: persistableResults,
+      });
+    } catch (error) {
+      console.error('Failed to persist admin forced match result', {
+        roomId: runtimeEntry.room.roomId,
+        matchId: runtimeEntry.room.matchId,
+        error,
+      });
+    }
+
+    const publicResults = persistableResults.map((result) => ({
+      playerId: result.playerId,
+      rank: result.rank,
+      score: result.score,
+    }));
+
+    this.broadcastGameOver(runtimeEntry, endedAtMs, publicResults);
+    runtimeEntry.runtime.stop('admin_forced');
+  }
+
+  public evictPlayer(lobbyId: string, playerId: string): void {
+    for (const runtimeEntry of this.runtimesByRoomId.values()) {
+      if (runtimeEntry.room.lobbyId !== lobbyId || runtimeEntry.stopped) {
+        continue;
+      }
+
+      const relatedConnectionIds = new Set<string>([
+        ...runtimeEntry.joinedConnectionIds,
+        ...runtimeEntry.connectedConnectionIds,
+      ]);
+
+      let didEvict = false;
+      for (const connectionId of relatedConnectionIds) {
+        const context = this.connectionRegistry.get(connectionId);
+        if (!context || context.playerId !== playerId) {
+          continue;
+        }
+
+        runtimeEntry.connectedConnectionIds.delete(connectionId);
+        runtimeEntry.joinedConnectionIds.delete(connectionId);
+        this.connectionRegistry.patch(connectionId, {
+          gameRoomId: undefined,
+          gameSessionRole: undefined,
+          spectatorId: undefined,
+          spectatorGuestId: undefined,
+          spectatorNickname: undefined,
+        });
+        didEvict = true;
+      }
+
+      if (didEvict) {
+        this.evaluateIdleState(runtimeEntry);
+      }
+    }
+  }
+
+  public getLobbyMonitorState(lobbyId: string): LobbyMonitorRoomState | null {
+    const roomRuntimes = [...this.runtimesByRoomId.values()]
+      .filter((entry) => entry.room.lobbyId === lobbyId && !entry.stopped)
+      .sort((a, b) => b.room.startedAtMs - a.room.startedAtMs);
+
+    const runtimeEntry = roomRuntimes.at(0);
+    if (!runtimeEntry) {
+      return null;
+    }
+
+    return {
+      roomId: runtimeEntry.room.roomId,
+      gameId: runtimeEntry.room.gameId,
+      tickRate: runtimeEntry.room.tickRate,
+      tick: runtimeEntry.runtime.getTick(),
+      runtimeState: runtimeEntry.runtimeState,
+      participantCount: runtimeEntry.room.playerIds.length,
+      connectedParticipantCount: runtimeEntry.connectedConnectionIds.size,
+      spectatorCount: runtimeEntry.spectatorConnectionIds.size,
+      startedAtMs: runtimeEntry.room.startedAtMs,
+    };
+  }
+
   public stopAll(reason = 'server_shutdown'): void {
     for (const runtimeEntry of this.runtimesByRoomId.values()) {
       runtimeEntry.runtime.stop(reason);
@@ -307,6 +489,7 @@ export class RoomRuntimeManager {
 
     if (runtimeEntry.runtime.isPaused()) {
       runtimeEntry.runtime.resume();
+      this.setRuntimeState(runtimeEntry, 'running');
     }
 
     this.connectionRegistry.patch(connectionId, {
@@ -453,6 +636,19 @@ export class RoomRuntimeManager {
     return runtimeEntry;
   }
 
+  private requireControllableRuntime(lobbyId: string, roomId: string): ActiveRoomRuntime {
+    const runtimeEntry = this.requireRuntimeEntry(roomId);
+    if (runtimeEntry.room.lobbyId !== lobbyId) {
+      throw new LobbyServiceError('invalid_state', 'Room is not associated with lobby.');
+    }
+
+    if (runtimeEntry.stopped) {
+      throw new LobbyServiceError('invalid_state', 'Room runtime has stopped.');
+    }
+
+    return runtimeEntry;
+  }
+
   private broadcastToSubscribers(runtimeEntry: ActiveRoomRuntime, message: ServerMessage): void {
     for (const connectionId of runtimeEntry.joinedConnectionIds) {
       this.transport.sendToConnection(connectionId, message);
@@ -460,6 +656,23 @@ export class RoomRuntimeManager {
     for (const connectionId of runtimeEntry.spectatorConnectionIds) {
       this.transport.sendToConnection(connectionId, message);
     }
+  }
+
+  private broadcastGameOver(
+    runtimeEntry: ActiveRoomRuntime,
+    endedAtMs: number,
+    results: Array<{ playerId: string; rank: number; score?: number }>,
+  ): void {
+    this.broadcastToSubscribers(runtimeEntry, {
+      v: PROTOCOL_VERSION,
+      type: 'game.over',
+      payload: {
+        roomId: runtimeEntry.room.roomId,
+        gameId: runtimeEntry.room.gameId,
+        endedAtMs,
+        results,
+      },
+    });
   }
 
   private clearExistingRoomBinding(
@@ -492,10 +705,12 @@ export class RoomRuntimeManager {
       if (runtimeEntry.runtime.isPaused()) {
         runtimeEntry.runtime.resume();
       }
+      this.setRuntimeState(runtimeEntry, 'running');
       return;
     }
 
     runtimeEntry.runtime.pause();
+    this.setRuntimeState(runtimeEntry, 'paused');
 
     if (runtimeEntry.idleTimeout) {
       return;
@@ -522,19 +737,73 @@ export class RoomRuntimeManager {
     }
 
     const stoppedAtMs =
-      reason === 'game_over' && runtimeEntry.pendingGameOverEndedAtMs !== undefined
+      (reason === 'game_over' || reason === 'admin_forced') && runtimeEntry.pendingGameOverEndedAtMs !== undefined
         ? runtimeEntry.pendingGameOverEndedAtMs
         : this.clock.nowMs();
 
     runtimeEntry.stopped = true;
     runtimeEntry.pendingGameOverEndedAtMs = undefined;
     this.clearIdleTimer(runtimeEntry);
+    this.setRuntimeState(runtimeEntry, 'stopped');
     this.roomManager.markStopped(runtimeEntry.room.roomId, stoppedAtMs);
     this.onRoomStopped?.({
       lobbyId: runtimeEntry.room.lobbyId,
       roomId: runtimeEntry.room.roomId,
       reason,
       stoppedAtMs,
+    });
+  }
+
+  private setRuntimeState(runtimeEntry: ActiveRoomRuntime, runtimeState: RuntimeState): void {
+    if (runtimeEntry.runtimeState === runtimeState) {
+      return;
+    }
+
+    runtimeEntry.runtimeState = runtimeState;
+    this.onRoomRuntimeStateChanged?.({
+      lobbyId: runtimeEntry.room.lobbyId,
+      roomId: runtimeEntry.room.roomId,
+      runtimeState,
+      atMs: this.clock.nowMs(),
+    });
+  }
+
+  private buildForcedResults(runtimeEntry: ActiveRoomRuntime): PersistableResult[] {
+    const playerStates = runtimeEntry.room.playerIds.map((playerId) => {
+      const eliminatedAtTick = runtimeEntry.eliminationTickByPlayerId.get(playerId) ?? null;
+      const aliveFromSnapshot = runtimeEntry.aliveByPlayerId.get(playerId);
+      const alive = aliveFromSnapshot ?? eliminatedAtTick === null;
+
+      return {
+        playerId,
+        alive,
+        eliminatedAtTick,
+      };
+    });
+
+    const sorted = playerStates.sort((a, b) => {
+      if (a.alive !== b.alive) {
+        return a.alive ? -1 : 1;
+      }
+
+      const aTick = a.eliminatedAtTick ?? Number.MAX_SAFE_INTEGER;
+      const bTick = b.eliminatedAtTick ?? Number.MAX_SAFE_INTEGER;
+      if (aTick !== bTick) {
+        return bTick - aTick;
+      }
+
+      return a.playerId.localeCompare(b.playerId);
+    });
+
+    return sorted.map((player, index) => {
+      const rank = index + 1;
+      return {
+        playerId: player.playerId,
+        rank,
+        score: Math.max(0, sorted.length - rank),
+        alive: player.alive,
+        eliminatedAtTick: player.eliminatedAtTick,
+      };
     });
   }
 }

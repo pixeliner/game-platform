@@ -46,6 +46,14 @@ export interface UseLobbyConnectionResult {
   castVote: (gameId: string) => void;
   setReady: (isReady: boolean) => void;
   requestStart: () => void;
+  requestAdminMonitor: () => void;
+  setAdminTickRate: (tickRate: number) => void;
+  adminKickPlayer: (targetPlayerId: string, reason?: string) => void;
+  adminForceStart: () => void;
+  adminPauseRoom: (roomId: string) => void;
+  adminResumeRoom: (roomId: string) => void;
+  adminStopRoom: (roomId: string, reason?: string) => void;
+  adminForceEndRoom: (roomId: string) => void;
   leaveLobby: () => void;
   reconnectNow: () => void;
   clearError: () => void;
@@ -299,6 +307,14 @@ export function useLobbyConnection(options: UseLobbyConnectionOptions): UseLobby
             dispatch({ type: 'lobby.chat.message', payload: message.payload });
             return;
 
+          case 'lobby.admin.monitor.state':
+            dispatch({ type: 'lobby.admin.monitor.state', payload: message.payload });
+            return;
+
+          case 'lobby.admin.action.result':
+            dispatch({ type: 'lobby.admin.action.result', payload: message.payload });
+            return;
+
           case 'lobby.error':
             dispatch({ type: 'lobby.error', payload: message.payload });
             return;
@@ -431,6 +447,168 @@ export function useLobbyConnection(options: UseLobbyConnectionOptions): UseLobby
     });
   }, [sendMessage]);
 
+  const requestAdminMonitor = useCallback(() => {
+    const auth = stateRef.current.auth;
+    const lobbyState = stateRef.current.lobbyState;
+    if (!auth || !lobbyState) {
+      return;
+    }
+
+    sendMessage({
+      v: 1,
+      type: 'lobby.admin.monitor.request',
+      payload: {
+        lobbyId: lobbyState.lobbyId,
+        requestedByPlayerId: auth.playerId,
+      },
+    });
+  }, [sendMessage]);
+
+  const setAdminTickRate = useCallback(
+    (tickRate: number) => {
+      const auth = stateRef.current.auth;
+      const lobbyState = stateRef.current.lobbyState;
+      if (!auth || !lobbyState) {
+        return;
+      }
+
+      sendMessage({
+        v: 1,
+        type: 'lobby.admin.tick_rate.set',
+        payload: {
+          lobbyId: lobbyState.lobbyId,
+          requestedByPlayerId: auth.playerId,
+          tickRate,
+        },
+      });
+    },
+    [sendMessage],
+  );
+
+  const adminKickPlayer = useCallback(
+    (targetPlayerId: string, reason?: string) => {
+      const auth = stateRef.current.auth;
+      const lobbyState = stateRef.current.lobbyState;
+      if (!auth || !lobbyState) {
+        return;
+      }
+
+      sendMessage({
+        v: 1,
+        type: 'lobby.admin.kick',
+        payload: {
+          lobbyId: lobbyState.lobbyId,
+          requestedByPlayerId: auth.playerId,
+          targetPlayerId,
+          reason,
+        },
+      });
+    },
+    [sendMessage],
+  );
+
+  const adminForceStart = useCallback(() => {
+    const auth = stateRef.current.auth;
+    const lobbyState = stateRef.current.lobbyState;
+    if (!auth || !lobbyState) {
+      return;
+    }
+
+    sendMessage({
+      v: 1,
+      type: 'lobby.admin.start.force',
+      payload: {
+        lobbyId: lobbyState.lobbyId,
+        requestedByPlayerId: auth.playerId,
+      },
+    });
+  }, [sendMessage]);
+
+  const adminPauseRoom = useCallback(
+    (roomId: string) => {
+      const auth = stateRef.current.auth;
+      const lobbyState = stateRef.current.lobbyState;
+      if (!auth || !lobbyState) {
+        return;
+      }
+
+      sendMessage({
+        v: 1,
+        type: 'lobby.admin.room.pause',
+        payload: {
+          lobbyId: lobbyState.lobbyId,
+          roomId,
+          requestedByPlayerId: auth.playerId,
+        },
+      });
+    },
+    [sendMessage],
+  );
+
+  const adminResumeRoom = useCallback(
+    (roomId: string) => {
+      const auth = stateRef.current.auth;
+      const lobbyState = stateRef.current.lobbyState;
+      if (!auth || !lobbyState) {
+        return;
+      }
+
+      sendMessage({
+        v: 1,
+        type: 'lobby.admin.room.resume',
+        payload: {
+          lobbyId: lobbyState.lobbyId,
+          roomId,
+          requestedByPlayerId: auth.playerId,
+        },
+      });
+    },
+    [sendMessage],
+  );
+
+  const adminStopRoom = useCallback(
+    (roomId: string, reason?: string) => {
+      const auth = stateRef.current.auth;
+      const lobbyState = stateRef.current.lobbyState;
+      if (!auth || !lobbyState) {
+        return;
+      }
+
+      sendMessage({
+        v: 1,
+        type: 'lobby.admin.room.stop',
+        payload: {
+          lobbyId: lobbyState.lobbyId,
+          roomId,
+          requestedByPlayerId: auth.playerId,
+          reason,
+        },
+      });
+    },
+    [sendMessage],
+  );
+
+  const adminForceEndRoom = useCallback(
+    (roomId: string) => {
+      const auth = stateRef.current.auth;
+      const lobbyState = stateRef.current.lobbyState;
+      if (!auth || !lobbyState) {
+        return;
+      }
+
+      sendMessage({
+        v: 1,
+        type: 'lobby.admin.room.force_end',
+        payload: {
+          lobbyId: lobbyState.lobbyId,
+          roomId,
+          requestedByPlayerId: auth.playerId,
+        },
+      });
+    },
+    [sendMessage],
+  );
+
   const leaveLobby = useCallback(() => {
     const auth = stateRef.current.auth;
     const lobbyState = stateRef.current.lobbyState;
@@ -469,6 +647,14 @@ export function useLobbyConnection(options: UseLobbyConnectionOptions): UseLobby
     castVote,
     setReady,
     requestStart,
+    requestAdminMonitor,
+    setAdminTickRate,
+    adminKickPlayer,
+    adminForceStart,
+    adminPauseRoom,
+    adminResumeRoom,
+    adminStopRoom,
+    adminForceEndRoom,
     leaveLobby,
     reconnectNow,
     clearError,

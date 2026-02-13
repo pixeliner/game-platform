@@ -78,7 +78,9 @@ const validMessages: ProtocolMessage[] = [
       hostPlayerId: 'player-1',
       phase: 'waiting',
       activeRoomId: null,
+      activeRoomRuntimeState: null,
       selectedGameId: 'bomberman',
+      configuredTickRate: 20,
       requiresPassword: true,
       maxPlayers: 4,
       players: [
@@ -112,6 +114,117 @@ const validMessages: ProtocolMessage[] = [
     payload: {
       lobbyId: 'lobby-1',
       requestedByPlayerId: 'player-1',
+    },
+  },
+  {
+    v: PROTOCOL_VERSION,
+    type: 'lobby.admin.monitor.request',
+    payload: {
+      lobbyId: 'lobby-1',
+      requestedByPlayerId: 'player-1',
+    },
+  },
+  {
+    v: PROTOCOL_VERSION,
+    type: 'lobby.admin.tick_rate.set',
+    payload: {
+      lobbyId: 'lobby-1',
+      requestedByPlayerId: 'player-1',
+      tickRate: 30,
+    },
+  },
+  {
+    v: PROTOCOL_VERSION,
+    type: 'lobby.admin.kick',
+    payload: {
+      lobbyId: 'lobby-1',
+      requestedByPlayerId: 'player-1',
+      targetPlayerId: 'player-2',
+      reason: 'afk',
+    },
+  },
+  {
+    v: PROTOCOL_VERSION,
+    type: 'lobby.admin.start.force',
+    payload: {
+      lobbyId: 'lobby-1',
+      requestedByPlayerId: 'player-1',
+    },
+  },
+  {
+    v: PROTOCOL_VERSION,
+    type: 'lobby.admin.room.pause',
+    payload: {
+      lobbyId: 'lobby-1',
+      roomId: 'room-1',
+      requestedByPlayerId: 'player-1',
+    },
+  },
+  {
+    v: PROTOCOL_VERSION,
+    type: 'lobby.admin.room.resume',
+    payload: {
+      lobbyId: 'lobby-1',
+      roomId: 'room-1',
+      requestedByPlayerId: 'player-1',
+    },
+  },
+  {
+    v: PROTOCOL_VERSION,
+    type: 'lobby.admin.room.stop',
+    payload: {
+      lobbyId: 'lobby-1',
+      roomId: 'room-1',
+      requestedByPlayerId: 'player-1',
+      reason: 'maintenance',
+    },
+  },
+  {
+    v: PROTOCOL_VERSION,
+    type: 'lobby.admin.room.force_end',
+    payload: {
+      lobbyId: 'lobby-1',
+      roomId: 'room-1',
+      requestedByPlayerId: 'player-1',
+    },
+  },
+  {
+    v: PROTOCOL_VERSION,
+    type: 'lobby.admin.monitor.state',
+    payload: {
+      lobbyId: 'lobby-1',
+      generatedAtMs: 1700000000000,
+      hostPlayerId: 'player-1',
+      phase: 'in_game',
+      activeRoomId: 'room-1',
+      activeRoomRuntimeState: 'running',
+      configuredTickRate: 20,
+      connectedPlayerCount: 2,
+      totalPlayerCount: 2,
+      room: {
+        roomId: 'room-1',
+        gameId: 'bomberman',
+        tickRate: 20,
+        tick: 33,
+        runtimeState: 'running',
+        participantCount: 2,
+        connectedParticipantCount: 2,
+        spectatorCount: 1,
+        startedAtMs: 1700000000000,
+      },
+    },
+  },
+  {
+    v: PROTOCOL_VERSION,
+    type: 'lobby.admin.action.result',
+    payload: {
+      lobbyId: 'lobby-1',
+      action: 'tick_rate.set',
+      status: 'accepted',
+      requestedByPlayerId: 'player-1',
+      tickRate: 30,
+      message: 'Tick rate updated.',
+      atMs: 1700000000000,
     },
   },
   {
@@ -341,6 +454,26 @@ describe('protocol message codec', () => {
         guestId: 'guest-1',
         nickname: 'Alice',
         password: 'abc',
+      },
+    });
+
+    expect(() => decodeMessage(raw)).toThrow(ProtocolDecodeError);
+
+    const result = safeDecodeMessage(raw);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('invalid_message');
+    }
+  });
+
+  it('rejects malformed payload for lobby.admin.tick_rate.set', () => {
+    const raw = JSON.stringify({
+      v: PROTOCOL_VERSION,
+      type: 'lobby.admin.tick_rate.set',
+      payload: {
+        lobbyId: 'lobby-1',
+        requestedByPlayerId: 'player-1',
+        tickRate: 9,
       },
     });
 

@@ -24,7 +24,9 @@ export interface LobbyState {
   hostPlayerId: string;
   phase: LobbyPhase;
   activeRoomId: string | null;
+  activeRoomRuntimeState: 'running' | 'paused' | null;
   selectedGameId: string | null;
+  configuredTickRate: number;
   maxPlayers: number;
   passwordHash: LobbyPasswordHash | null;
   createdAtMs: number;
@@ -40,6 +42,7 @@ export interface CreateLobbyInput {
   nickname: string;
   lobbyName: string;
   maxPlayers: number;
+  configuredTickRate: number;
   passwordHash: LobbyPasswordHash | null;
   nowMs: number;
 }
@@ -77,6 +80,7 @@ export interface VoteCastInput {
 export interface StartRequestInput {
   lobbyId: string;
   requestedByPlayerId: string;
+  bypassReadiness?: boolean;
   nowMs: number;
 }
 
@@ -91,7 +95,9 @@ export interface LobbyView {
   hostPlayerId: string;
   phase: LobbyPhase;
   activeRoomId: string | null;
+  activeRoomRuntimeState: 'running' | 'paused' | null;
   selectedGameId: string | null;
+  configuredTickRate: number;
   requiresPassword: boolean;
   maxPlayers: number;
   players: Array<{

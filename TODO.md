@@ -72,9 +72,9 @@
 - [x] Add filters/sorting for discoverability and quick join
 
 ## Milestone 13: Debug/Admin Tooling
-- [ ] Add debug command system for host/admin actions
-- [ ] Add host options and runtime controls (tick rate, start/stop, kick, etc.)
-- [ ] Add monitoring/diagnostics surface for admins
+- [x] Add debug command system for host/admin actions
+- [x] Add host options and runtime controls (tick rate, start/stop, kick, etc.)
+- [x] Add monitoring/diagnostics surface for admins
 
 ## Milestone 14: CI Pipeline
 - [ ] Add CI pipeline for lint, typecheck, and tests across workspace

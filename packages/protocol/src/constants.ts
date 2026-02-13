@@ -1,4 +1,6 @@
 export const PROTOCOL_VERSION = 1 as const;
+export const ADMIN_TICK_RATE_MIN = 10 as const;
+export const ADMIN_TICK_RATE_MAX = 60 as const;
 
 export const LOBBY_MESSAGE_TYPES = [
   'lobby.create',
@@ -11,6 +13,16 @@ export const LOBBY_MESSAGE_TYPES = [
   'lobby.ready.set',
   'lobby.start.request',
   'lobby.start.accepted',
+  'lobby.admin.monitor.request',
+  'lobby.admin.tick_rate.set',
+  'lobby.admin.kick',
+  'lobby.admin.start.force',
+  'lobby.admin.room.pause',
+  'lobby.admin.room.resume',
+  'lobby.admin.room.stop',
+  'lobby.admin.room.force_end',
+  'lobby.admin.monitor.state',
+  'lobby.admin.action.result',
   'lobby.auth.issued',
   'lobby.error',
 ] as const;

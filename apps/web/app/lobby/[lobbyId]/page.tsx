@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import type { LobbyStateMessage } from '@game-platform/protocol';
 
+import { AdminDashboard } from '@/src/features/admin/components/admin-dashboard';
 import { ChatPanel } from '@/src/features/lobby/components/chat-panel';
 import { ConnectionBanner } from '@/src/features/lobby/components/connection-banner';
 import { ErrorBanner } from '@/src/features/lobby/components/error-banner';
@@ -57,6 +58,7 @@ function getStartDisabledReason(
 }
 
 const ACTIVE_GAME_SESSION_TTL_MS = 6 * 60 * 60 * 1000;
+const ADMIN_MONITOR_POLL_INTERVAL_MS = 1_500;
 
 export default function LobbyPage(): React.JSX.Element {
   const params = useParams<{ lobbyId: string }>();
@@ -98,6 +100,7 @@ export default function LobbyPage(): React.JSX.Element {
   }, [connection.currentPlayerId, lobbyState]);
 
   const startDisabledReason = getStartDisabledReason(lobbyState, connection.currentPlayerId);
+  const isHostPlayer = currentPlayer?.isHost ?? false;
 
   useEffect(() => {
     if (!rematchMode || !lobbyState || !connection.currentPlayerId) {
@@ -154,6 +157,30 @@ export default function LobbyPage(): React.JSX.Element {
     rematchMode,
   ]);
 
+  useEffect(() => {
+    if (!lobbyState || !isHostPlayer) {
+      return;
+    }
+
+    if (connection.state.connectionStatus !== 'connected') {
+      return;
+    }
+
+    connection.requestAdminMonitor();
+    const interval = setInterval(() => {
+      connection.requestAdminMonitor();
+    }, ADMIN_MONITOR_POLL_INTERVAL_MS);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [
+    connection.requestAdminMonitor,
+    connection.state.connectionStatus,
+    isHostPlayer,
+    lobbyState?.lobbyId,
+  ]);
+
   return (
     <main className="space-y-4">
       <ConnectionBanner
@@ -187,6 +214,11 @@ export default function LobbyPage(): React.JSX.Element {
         <Button asChild variant="outline" size="sm">
           <Link href="/stats/me">My Stats</Link>
         </Button>
+        {lobbyState && isHostPlayer ? (
+          <Button asChild variant="secondary" size="sm">
+            <Link href={`/admin?lobbyId=${encodeURIComponent(lobbyState.lobbyId)}`}>Admin Console</Link>
+          </Button>
+        ) : null}
         {lobbyState?.phase === 'in_game' && lobbyState.activeRoomId ? (
           <>
             <Button asChild variant="secondary" size="sm">
@@ -212,7 +244,9 @@ export default function LobbyPage(): React.JSX.Element {
             lobbyName={lobbyState.lobbyName}
             phase={lobbyState.phase}
             activeRoomId={lobbyState.activeRoomId}
+            activeRoomRuntimeState={lobbyState.activeRoomRuntimeState}
             selectedGameId={lobbyState.selectedGameId}
+            configuredTickRate={lobbyState.configuredTickRate}
             requiresPassword={lobbyState.requiresPassword}
             maxPlayers={lobbyState.maxPlayers}
             playerCount={lobbyState.players.length}
@@ -247,6 +281,21 @@ export default function LobbyPage(): React.JSX.Element {
                 disabledReason={startDisabledReason}
                 onStart={connection.requestStart}
               />
+              {isHostPlayer ? (
+                <AdminDashboard
+                  lobbyState={lobbyState}
+                  adminMonitor={connection.state.adminMonitor}
+                  adminActionResults={connection.state.adminActionResults}
+                  onRequestMonitor={connection.requestAdminMonitor}
+                  onSetTickRate={connection.setAdminTickRate}
+                  onKickPlayer={connection.adminKickPlayer}
+                  onForceStart={connection.adminForceStart}
+                  onPauseRoom={connection.adminPauseRoom}
+                  onResumeRoom={connection.adminResumeRoom}
+                  onStopRoom={connection.adminStopRoom}
+                  onForceEndRoom={connection.adminForceEndRoom}
+                />
+              ) : null}
               <div className="arcade-surface p-4">
                 <Button variant="ghost" className="w-full" onClick={connection.leaveLobby}>
                   Leave Lobby

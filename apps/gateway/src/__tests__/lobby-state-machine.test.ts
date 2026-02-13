@@ -26,6 +26,7 @@ describe('LobbyStateMachine', () => {
       nickname: 'Host',
       lobbyName: 'LAN Session',
       maxPlayers: 4,
+      configuredTickRate: 20,
       passwordHash: null,
       nowMs: 1,
     });
@@ -33,6 +34,8 @@ describe('LobbyStateMachine', () => {
     expect(lobby.hostPlayerId).toBe('player-1');
     expect(lobby.phase).toBe('waiting');
     expect(lobby.activeRoomId).toBeNull();
+    expect(lobby.activeRoomRuntimeState).toBeNull();
+    expect(lobby.configuredTickRate).toBe(20);
     expect(lobby.playersById.get('player-1')?.isHost).toBe(true);
   });
 
@@ -46,6 +49,7 @@ describe('LobbyStateMachine', () => {
       nickname: 'Host',
       lobbyName: 'LAN Session',
       maxPlayers: 4,
+      configuredTickRate: 20,
       passwordHash: null,
       nowMs: 1,
     });
@@ -73,6 +77,7 @@ describe('LobbyStateMachine', () => {
       nickname: 'Host',
       lobbyName: 'LAN Session',
       maxPlayers: 2,
+      configuredTickRate: 20,
       passwordHash: null,
       nowMs: 1,
     });
@@ -108,6 +113,7 @@ describe('LobbyStateMachine', () => {
       nickname: 'Host',
       lobbyName: 'LAN Session',
       maxPlayers: 4,
+      configuredTickRate: 20,
       passwordHash: null,
       nowMs: 1,
     });
@@ -163,6 +169,7 @@ describe('LobbyStateMachine', () => {
       nickname: 'Host',
       lobbyName: 'LAN Session',
       maxPlayers: 4,
+      configuredTickRate: 20,
       passwordHash: null,
       nowMs: 1,
     });
@@ -225,6 +232,45 @@ describe('LobbyStateMachine', () => {
     expect(started.lobby.phase).toBe('starting');
   });
 
+  it('allows host force-start while bypassing readiness checks only', () => {
+    const machine = new LobbyStateMachine();
+
+    machine.createLobby({
+      lobbyId: 'lobby-1',
+      playerId: 'player-1',
+      guestId: 'guest-1',
+      nickname: 'Host',
+      lobbyName: 'LAN Session',
+      maxPlayers: 4,
+      configuredTickRate: 20,
+      passwordHash: null,
+      nowMs: 1,
+    });
+    machine.joinLobby({
+      lobbyId: 'lobby-1',
+      playerId: 'player-2',
+      guestId: 'guest-2',
+      nickname: 'Guest',
+      nowMs: 2,
+    });
+    machine.castVote({
+      lobbyId: 'lobby-1',
+      playerId: 'player-1',
+      gameId: 'bomberman',
+      nowMs: 3,
+    });
+
+    const started = machine.requestStart({
+      lobbyId: 'lobby-1',
+      requestedByPlayerId: 'player-1',
+      bypassReadiness: true,
+      nowMs: 4,
+    });
+
+    expect(started.gameId).toBe('bomberman');
+    expect(started.lobby.phase).toBe('starting');
+  });
+
   it('returns lobby to waiting and resets readiness after game completion', () => {
     const machine = new LobbyStateMachine();
 
@@ -235,6 +281,7 @@ describe('LobbyStateMachine', () => {
       nickname: 'Host',
       lobbyName: 'LAN Session',
       maxPlayers: 4,
+      configuredTickRate: 20,
       passwordHash: null,
       nowMs: 1,
     });
@@ -270,12 +317,14 @@ describe('LobbyStateMachine', () => {
       requestedByPlayerId: 'player-1',
       nowMs: 6,
     });
-    machine.setInGame('lobby-1', 'room-1', 7);
+    const inGameLobby = machine.setInGame('lobby-1', 'room-1', 7);
+    expect(inGameLobby.activeRoomRuntimeState).toBe('running');
 
     const resetLobby = machine.setWaitingAfterGame('lobby-1', 8);
 
     expect(resetLobby.phase).toBe('waiting');
     expect(resetLobby.activeRoomId).toBeNull();
+    expect(resetLobby.activeRoomRuntimeState).toBeNull();
     expect(resetLobby.selectedGameId).toBe('bomberman');
     expect(resetLobby.playersById.get('player-1')?.isReady).toBe(false);
     expect(resetLobby.playersById.get('player-2')?.isReady).toBe(false);

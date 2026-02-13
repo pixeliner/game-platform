@@ -12,6 +12,16 @@
 - lobby.ready.set
 - lobby.start.request
 - lobby.start.accepted (server)
+- lobby.admin.monitor.request
+- lobby.admin.tick_rate.set
+- lobby.admin.kick
+- lobby.admin.start.force
+- lobby.admin.room.pause
+- lobby.admin.room.resume
+- lobby.admin.room.stop
+- lobby.admin.room.force_end
+- lobby.admin.monitor.state (server direct)
+- lobby.admin.action.result (server direct)
 - lobby.auth.issued (server direct)
 - lobby.error
 
@@ -64,6 +74,8 @@
 - `lobby.state.players[*]` includes `isConnected` for reconnect visibility
 - `lobby.state.activeRoomId` indicates the currently active room while phase is `in_game`
 - `lobby.state` includes `lobbyName`, `requiresPassword`, and `maxPlayers`
+- `lobby.state.configuredTickRate` is the host-configurable tick rate for the next room start
+- `lobby.state.activeRoomRuntimeState` tracks current room runtime mode (`running` | `paused` | `null`)
 
 ## Spectators
 - Late join spectators can attach to active rooms using:
@@ -76,6 +88,22 @@
 - Match completion keeps lobby identity and vote selection intact.
 - After `game.over`, gateway transitions lobby phase from `in_game` back to `waiting`.
 - Connected players are reset to `isReady = false` and must ready/start again for a rematch.
+
+## Admin Tooling
+- All `lobby.admin.*` commands are host-only.
+- Tick-rate set bounds: `10` to `60` TPS.
+- Tick-rate changes are sticky for the lobby lifecycle and apply on future room starts.
+- Force start bypasses readiness checks only; selected game and minimum players still apply.
+- Kick removes the target player from lobby membership and active room bindings.
+- Room controls:
+  - pause / resume runtime
+  - stop room (`admin_stop`)
+  - force end room (`admin_forced`)
+- Force end emits `game.over` and persists a completed match with `endReason = \"admin_forced\"`.
+- `lobby.admin.monitor.state` provides host diagnostics:
+  - lobby phase/room linkage
+  - configured tick rate
+  - runtime state, tick, participant/spectator counts
 
 ## Game Module Interface (packages/engine)
 - Each module must be deterministic given:

@@ -32,6 +32,7 @@ export interface ConnectionRegistry {
 export interface GatewayTransport {
   sendToConnection(connectionId: string, message: ServerMessage): void;
   broadcastToLobby(lobbyId: string, message: LobbyServerMessage): void;
+  closeConnection(connectionId: string, code?: number, reason?: string): void;
 }
 
 export interface IdGenerator {
@@ -71,7 +72,25 @@ export interface RoomRuntimeManager {
   startRoomRuntime(room: RoomRecord): void;
   handleGameMessage(connectionId: string, message: GameClientMessage): void;
   handleConnectionClosed(connectionId: string, context?: GatewayConnectionContext): void;
+  pauseRoom(lobbyId: string, roomId: string): void;
+  resumeRoom(lobbyId: string, roomId: string): void;
+  stopRoom(lobbyId: string, roomId: string, reason?: string): void;
+  forceEndRoom(lobbyId: string, roomId: string): void;
+  evictPlayer(lobbyId: string, playerId: string): void;
+  getLobbyMonitorState(lobbyId: string): LobbyMonitorRoomState | null;
   stopAll(reason?: string): void;
+}
+
+export interface LobbyMonitorRoomState {
+  roomId: string;
+  gameId: string;
+  tickRate: number;
+  tick: number;
+  runtimeState: 'running' | 'paused' | 'stopped';
+  participantCount: number;
+  connectedParticipantCount: number;
+  spectatorCount: number;
+  startedAtMs: number;
 }
 
 export interface MatchPersistenceService {

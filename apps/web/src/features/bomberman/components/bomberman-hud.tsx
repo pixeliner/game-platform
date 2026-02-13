@@ -125,6 +125,11 @@ export function BombermanHud(props: BombermanHudProps): React.JSX.Element {
             <Button variant="ghost" size="sm" onClick={props.onBackToLobby}>
               Back to Lobby
             </Button>
+            {props.lobbyId ? (
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/admin?lobbyId=${encodeURIComponent(props.lobbyId)}`}>Admin</Link>
+              </Button>
+            ) : null}
             <Button asChild variant="outline" size="sm">
               <Link href="/history">History</Link>
             </Button>

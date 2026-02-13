@@ -22,6 +22,14 @@ export class GatewayMessageRouter {
         case 'lobby.vote.cast':
         case 'lobby.ready.set':
         case 'lobby.start.request':
+        case 'lobby.admin.monitor.request':
+        case 'lobby.admin.tick_rate.set':
+        case 'lobby.admin.kick':
+        case 'lobby.admin.start.force':
+        case 'lobby.admin.room.pause':
+        case 'lobby.admin.room.resume':
+        case 'lobby.admin.room.stop':
+        case 'lobby.admin.room.force_end':
           this.lobbyService.handleLobbyClientMessage(connectionId, message);
           return;
         case 'game.join':

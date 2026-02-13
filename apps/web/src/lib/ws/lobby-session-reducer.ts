@@ -1,4 +1,6 @@
 import type {
+  LobbyAdminActionResultMessage,
+  LobbyAdminMonitorStateMessage,
   LobbyAuthIssuedMessage,
   LobbyChatMessage,
   LobbyErrorMessage,
@@ -28,6 +30,8 @@ export interface LobbySessionState {
   auth: LobbyAuthState | null;
   lobbyState: LobbyStateMessage['payload'] | null;
   chatMessages: LobbyChatMessage['payload'][];
+  adminMonitor: LobbyAdminMonitorStateMessage['payload'] | null;
+  adminActionResults: LobbyAdminActionResultMessage['payload'][];
   lastError: LobbyErrorMessage['payload'] | null;
   startAccepted: LobbyStartAcceptedMessage['payload'] | null;
 }
@@ -53,6 +57,14 @@ export type LobbySessionAction =
       payload: LobbyChatMessage['payload'];
     }
   | {
+      type: 'lobby.admin.monitor.state';
+      payload: LobbyAdminMonitorStateMessage['payload'];
+    }
+  | {
+      type: 'lobby.admin.action.result';
+      payload: LobbyAdminActionResultMessage['payload'];
+    }
+  | {
       type: 'lobby.error';
       payload: LobbyErrorMessage['payload'];
     }
@@ -73,6 +85,8 @@ export const initialLobbySessionState: LobbySessionState = {
   auth: null,
   lobbyState: null,
   chatMessages: [],
+  adminMonitor: null,
+  adminActionResults: [],
   lastError: null,
   startAccepted: null,
 };
@@ -122,6 +136,30 @@ export function lobbySessionReducer(
       return {
         ...state,
         chatMessages,
+      };
+    }
+
+    case 'lobby.admin.monitor.state': {
+      return {
+        ...state,
+        adminMonitor: action.payload,
+      };
+    }
+
+    case 'lobby.admin.action.result': {
+      const adminActionResults = [...state.adminActionResults, action.payload]
+        .sort((a, b) => {
+          if (a.atMs === b.atMs) {
+            return a.action.localeCompare(b.action);
+          }
+
+          return a.atMs - b.atMs;
+        })
+        .slice(-25);
+
+      return {
+        ...state,
+        adminActionResults,
       };
     }
 

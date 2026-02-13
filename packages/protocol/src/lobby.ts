@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
-import { PROTOCOL_VERSION } from './constants.js';
+import {
+  ADMIN_TICK_RATE_MAX,
+  ADMIN_TICK_RATE_MIN,
+  PROTOCOL_VERSION,
+} from './constants.js';
 
 const idSchema = z.string().min(1).max(64);
 const nicknameSchema = z.string().min(1).max(32);
@@ -10,6 +14,8 @@ const gameIdSchema = z.string().min(1).max(64);
 const chatTextSchema = z.string().min(1).max(1000);
 const lobbyNameSchema = z.string().min(1).max(64);
 const lobbyPasswordSchema = z.string().min(4).max(64);
+const adminTickRateSchema = z.number().int().min(ADMIN_TICK_RATE_MIN).max(ADMIN_TICK_RATE_MAX);
+const roomRuntimeStateSchema = z.enum(['running', 'paused']);
 
 const lobbyPlayerSchema = z.object({
   playerId: idSchema,
@@ -36,7 +42,9 @@ const lobbyStatePayloadSchema = z.object({
   hostPlayerId: idSchema,
   phase: z.enum(['waiting', 'starting', 'in_game', 'closed']),
   activeRoomId: roomIdSchema.nullable(),
+  activeRoomRuntimeState: roomRuntimeStateSchema.nullable(),
   selectedGameId: gameIdSchema.nullable(),
+  configuredTickRate: adminTickRateSchema,
   requiresPassword: z.boolean(),
   maxPlayers: z.number().int().positive(),
   players: z.array(lobbyPlayerSchema),
@@ -140,6 +148,144 @@ export const lobbyStartAcceptedMessageSchema = z.object({
   }),
 });
 
+export const lobbyAdminMonitorRequestMessageSchema = z.object({
+  v: z.literal(PROTOCOL_VERSION),
+  type: z.literal('lobby.admin.monitor.request'),
+  payload: z.object({
+    lobbyId: lobbyIdSchema,
+    requestedByPlayerId: idSchema,
+  }),
+});
+
+export const lobbyAdminTickRateSetMessageSchema = z.object({
+  v: z.literal(PROTOCOL_VERSION),
+  type: z.literal('lobby.admin.tick_rate.set'),
+  payload: z.object({
+    lobbyId: lobbyIdSchema,
+    requestedByPlayerId: idSchema,
+    tickRate: adminTickRateSchema,
+  }),
+});
+
+export const lobbyAdminKickMessageSchema = z.object({
+  v: z.literal(PROTOCOL_VERSION),
+  type: z.literal('lobby.admin.kick'),
+  payload: z.object({
+    lobbyId: lobbyIdSchema,
+    requestedByPlayerId: idSchema,
+    targetPlayerId: idSchema,
+    reason: z.string().min(1).max(256).optional(),
+  }),
+});
+
+export const lobbyAdminStartForceMessageSchema = z.object({
+  v: z.literal(PROTOCOL_VERSION),
+  type: z.literal('lobby.admin.start.force'),
+  payload: z.object({
+    lobbyId: lobbyIdSchema,
+    requestedByPlayerId: idSchema,
+  }),
+});
+
+export const lobbyAdminRoomPauseMessageSchema = z.object({
+  v: z.literal(PROTOCOL_VERSION),
+  type: z.literal('lobby.admin.room.pause'),
+  payload: z.object({
+    lobbyId: lobbyIdSchema,
+    roomId: roomIdSchema,
+    requestedByPlayerId: idSchema,
+  }),
+});
+
+export const lobbyAdminRoomResumeMessageSchema = z.object({
+  v: z.literal(PROTOCOL_VERSION),
+  type: z.literal('lobby.admin.room.resume'),
+  payload: z.object({
+    lobbyId: lobbyIdSchema,
+    roomId: roomIdSchema,
+    requestedByPlayerId: idSchema,
+  }),
+});
+
+export const lobbyAdminRoomStopMessageSchema = z.object({
+  v: z.literal(PROTOCOL_VERSION),
+  type: z.literal('lobby.admin.room.stop'),
+  payload: z.object({
+    lobbyId: lobbyIdSchema,
+    roomId: roomIdSchema,
+    requestedByPlayerId: idSchema,
+    reason: z.string().min(1).max(256).optional(),
+  }),
+});
+
+export const lobbyAdminRoomForceEndMessageSchema = z.object({
+  v: z.literal(PROTOCOL_VERSION),
+  type: z.literal('lobby.admin.room.force_end'),
+  payload: z.object({
+    lobbyId: lobbyIdSchema,
+    roomId: roomIdSchema,
+    requestedByPlayerId: idSchema,
+  }),
+});
+
+export const lobbyAdminMonitorStateMessageSchema = z.object({
+  v: z.literal(PROTOCOL_VERSION),
+  type: z.literal('lobby.admin.monitor.state'),
+  payload: z.object({
+    lobbyId: lobbyIdSchema,
+    generatedAtMs: z.number().int().nonnegative(),
+    hostPlayerId: idSchema,
+    phase: z.enum(['waiting', 'starting', 'in_game', 'closed']),
+    activeRoomId: roomIdSchema.nullable(),
+    activeRoomRuntimeState: roomRuntimeStateSchema.nullable(),
+    configuredTickRate: adminTickRateSchema,
+    connectedPlayerCount: z.number().int().nonnegative(),
+    totalPlayerCount: z.number().int().nonnegative(),
+    room: z
+      .object({
+        roomId: roomIdSchema,
+        gameId: gameIdSchema,
+        tickRate: z.number().int().positive(),
+        tick: z.number().int().nonnegative(),
+        runtimeState: z.enum(['running', 'paused', 'stopped']),
+        participantCount: z.number().int().nonnegative(),
+        connectedParticipantCount: z.number().int().nonnegative(),
+        spectatorCount: z.number().int().nonnegative(),
+        startedAtMs: z.number().int().nonnegative(),
+      })
+      .nullable(),
+  }),
+});
+
+const adminActionSchema = z.enum([
+  'monitor.request',
+  'tick_rate.set',
+  'kick',
+  'start.force',
+  'room.pause',
+  'room.resume',
+  'room.stop',
+  'room.force_end',
+]);
+
+export const lobbyAdminActionResultMessageSchema = z.object({
+  v: z.literal(PROTOCOL_VERSION),
+  type: z.literal('lobby.admin.action.result'),
+  payload: z.object({
+    lobbyId: lobbyIdSchema,
+    action: adminActionSchema,
+    status: z.enum(['accepted', 'rejected']),
+    requestedByPlayerId: idSchema,
+    atMs: z.number().int().nonnegative(),
+    roomId: roomIdSchema.optional(),
+    targetPlayerId: idSchema.optional(),
+    tickRate: adminTickRateSchema.optional(),
+    reason: z.string().min(1).max(256).optional(),
+    message: z.string().min(1).max(256).optional(),
+    details: z.unknown().optional(),
+  }),
+});
+
 export const lobbyAuthIssuedMessageSchema = z.object({
   v: z.literal(PROTOCOL_VERSION),
   type: z.literal('lobby.auth.issued'),
@@ -171,12 +317,22 @@ export const lobbyClientMessageSchemas = [
   lobbyVoteCastMessageSchema,
   lobbyReadySetMessageSchema,
   lobbyStartRequestMessageSchema,
+  lobbyAdminMonitorRequestMessageSchema,
+  lobbyAdminTickRateSetMessageSchema,
+  lobbyAdminKickMessageSchema,
+  lobbyAdminStartForceMessageSchema,
+  lobbyAdminRoomPauseMessageSchema,
+  lobbyAdminRoomResumeMessageSchema,
+  lobbyAdminRoomStopMessageSchema,
+  lobbyAdminRoomForceEndMessageSchema,
 ] as const;
 
 export const lobbyServerMessageSchemas = [
   lobbyChatMessageSchema,
   lobbyStateMessageSchema,
   lobbyStartAcceptedMessageSchema,
+  lobbyAdminMonitorStateMessageSchema,
+  lobbyAdminActionResultMessageSchema,
   lobbyAuthIssuedMessageSchema,
   lobbyErrorMessageSchema,
 ] as const;
@@ -204,5 +360,16 @@ export type LobbyStateMessage = z.infer<typeof lobbyStateMessageSchema>;
 export type LobbyReadySetMessage = z.infer<typeof lobbyReadySetMessageSchema>;
 export type LobbyStartRequestMessage = z.infer<typeof lobbyStartRequestMessageSchema>;
 export type LobbyStartAcceptedMessage = z.infer<typeof lobbyStartAcceptedMessageSchema>;
+export type LobbyAdminMonitorRequestMessage = z.infer<typeof lobbyAdminMonitorRequestMessageSchema>;
+export type LobbyAdminTickRateSetMessage = z.infer<typeof lobbyAdminTickRateSetMessageSchema>;
+export type LobbyAdminKickMessage = z.infer<typeof lobbyAdminKickMessageSchema>;
+export type LobbyAdminStartForceMessage = z.infer<typeof lobbyAdminStartForceMessageSchema>;
+export type LobbyAdminRoomPauseMessage = z.infer<typeof lobbyAdminRoomPauseMessageSchema>;
+export type LobbyAdminRoomResumeMessage = z.infer<typeof lobbyAdminRoomResumeMessageSchema>;
+export type LobbyAdminRoomStopMessage = z.infer<typeof lobbyAdminRoomStopMessageSchema>;
+export type LobbyAdminRoomForceEndMessage = z.infer<typeof lobbyAdminRoomForceEndMessageSchema>;
+export type LobbyAdminMonitorStateMessage = z.infer<typeof lobbyAdminMonitorStateMessageSchema>;
+export type LobbyAdminActionResultMessage = z.infer<typeof lobbyAdminActionResultMessageSchema>;
+export type LobbyAdminAction = z.infer<typeof adminActionSchema>;
 export type LobbyAuthIssuedMessage = z.infer<typeof lobbyAuthIssuedMessageSchema>;
 export type LobbyErrorMessage = z.infer<typeof lobbyErrorMessageSchema>;
