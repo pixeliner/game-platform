@@ -435,7 +435,7 @@ describe('gateway websocket integration', () => {
         playerId: setup.hostPlayerId,
         tick: 1,
         input: {
-          kind: 'move',
+          kind: 'move.intent',
           direction: 'left',
         },
       },
@@ -480,8 +480,8 @@ describe('gateway websocket integration', () => {
         playerId: setup.hostPlayerId,
         tick: joinAccepted.payload.tick + 1,
         input: {
-          kind: 'move',
-          direction: 'up',
+          kind: 'move.intent',
+          direction: 'right',
         },
       },
     });
@@ -491,7 +491,7 @@ describe('gateway websocket integration', () => {
       (message): message is GameEventMessage =>
         isGameEvent(message) &&
         message.payload.roomId === startAccepted.payload.roomId &&
-        (message.payload.event as { kind?: unknown }).kind === 'input.applied',
+        (message.payload.event as { kind?: unknown }).kind === 'player.moved',
     );
     expect(event.payload.tick).toBeGreaterThanOrEqual(1);
 

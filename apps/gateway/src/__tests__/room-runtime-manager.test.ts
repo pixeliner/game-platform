@@ -198,7 +198,7 @@ describe('RoomRuntimeManager', () => {
           playerId: 'player-1',
           tick: 1,
           input: {
-            kind: 'move',
+            kind: 'move.intent',
             direction: 'left',
           },
         },
@@ -249,8 +249,8 @@ describe('RoomRuntimeManager', () => {
         playerId: 'player-1',
         tick: 1,
         input: {
-          kind: 'move',
-          direction: 'up',
+          kind: 'move.intent',
+          direction: 'right',
         },
       },
     });
@@ -259,9 +259,17 @@ describe('RoomRuntimeManager', () => {
 
     const eventMessage = harness.transport.findByType('conn-1', 'game.event');
     expect(eventMessage?.payload.event).toEqual({
-      kind: 'input.applied',
+      kind: 'player.moved',
       playerId: 'player-1',
-      inputKind: 'move',
+      from: {
+        x: 1,
+        y: 1,
+      },
+      to: {
+        x: 2,
+        y: 1,
+      },
+      direction: 'right',
     });
   });
 

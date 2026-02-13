@@ -1,5 +1,5 @@
 import type { GameModule } from '@game-platform/engine';
-import { GAME_ID_BOMBERMAN, bombermanStubModule } from '@game-platform/game-bomberman';
+import { GAME_ID_BOMBERMAN, bombermanModule } from '@game-platform/game-bomberman';
 
 export type AnyGameModule = GameModule<unknown, unknown, unknown, unknown, unknown>;
 
@@ -18,7 +18,7 @@ export class ModuleRegistry {
 export function createDefaultModuleRegistry(): ModuleRegistry {
   const registry = new ModuleRegistry();
   registry.register({
-    ...bombermanStubModule,
+    ...bombermanModule,
     gameId: GAME_ID_BOMBERMAN,
   });
   return registry;

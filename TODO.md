@@ -24,11 +24,11 @@
 - [x] Engine tests
 
 ## Milestone 4: Bomberman (Server Sim)
-- [ ] packages/games/bomberman: map + entities
-- [ ] Movement + collision
-- [ ] Bomb placement + fuse + explosion + deaths
-- [ ] Game over + results
-- [ ] Determinism tests
+- [x] packages/games/bomberman: map + entities
+- [x] Movement + collision
+- [x] Bomb placement + fuse + explosion + deaths
+- [x] Game over + results
+- [x] Determinism tests
 
 ## Milestone 5: Web UI (Lobby)
 - [ ] Next.js app with shadcn/ui

@@ -24,6 +24,22 @@
 - game.event
 - game.over
 
+## Bomberman v1 Payload Semantics
+- `game.input.payload.input` for bomberman:
+  - `{ kind: "move.intent", direction: "up" | "down" | "left" | "right" | null }`
+  - `{ kind: "bomb.place" }`
+- `game.event.payload.event` for bomberman:
+  - `player.moved`
+  - `bomb.placed`
+  - `bomb.exploded`
+  - `block.destroyed`
+  - `player.eliminated`
+  - `round.over`
+- `game.snapshot.payload.snapshot` for bomberman includes:
+  - `tick`, `phase`, `winnerPlayerId`
+  - map dimensions + wall/block tile coordinates
+  - player, bomb, and flame state arrays
+
 ## Identity
 - Client generates guestId (uuid) and nickname
 - Gateway issues short-lived session token for ws reconnect

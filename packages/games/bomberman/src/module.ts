@@ -1,61 +1,36 @@
 import type {
-  GameEventEnvelope,
   GameInstance,
   GameModule,
   InputValidationResult,
 } from '@game-platform/engine';
 
-export interface BombermanStubConfig {
-  playerIds: string[];
-}
+import { GAME_ID_BOMBERMAN } from './constants.js';
+import { getBombermanEventsSince } from './events.js';
+import { buildBombermanSnapshot } from './snapshot.js';
+import { createBombermanSimulationState } from './state/setup-world.js';
+import { runBombSystem } from './systems/bomb-system.js';
+import { runEliminationSystem } from './systems/elimination-system.js';
+import { runFlameSystem } from './systems/flame-system.js';
+import { runMovementSystem } from './systems/movement-system.js';
+import type {
+  BombermanConfig,
+  BombermanGameResults,
+  BombermanInput,
+  BombermanResult,
+  BombermanSnapshot,
+  BombermanEvent,
+} from './types.js';
 
-export type BombermanStubInput =
-  | {
-      kind: 'move';
-      direction: 'up' | 'down' | 'left' | 'right';
-    }
-  | {
-      kind: 'bomb.place';
-    };
-
-export interface BombermanStubPlayerState {
-  playerId: string;
-  lastInput: string | null;
-}
-
-export interface BombermanStubSnapshot {
-  tick: number;
-  players: BombermanStubPlayerState[];
-}
-
-export interface BombermanStubEvent {
-  kind: 'input.applied';
-  playerId: string;
-  inputKind: string;
-}
-
-export interface BombermanStubResults {
-  winnerPlayerId: string | null;
-}
-
-export const GAME_ID_BOMBERMAN = 'bomberman' as const;
-
-function validateBombermanStubInput(input: unknown): InputValidationResult<BombermanStubInput> {
-  if (typeof input !== 'object' || input === null) {
+function validateBombermanInput(input: unknown): InputValidationResult<BombermanInput> {
+  if (typeof input !== 'object' || input === null || !('kind' in input)) {
     return {
       ok: false,
-      reason: 'input_must_be_object',
-    };
-  }
-
-  if (!('kind' in input)) {
-    return {
-      ok: false,
-      reason: 'input_missing_kind',
+      reason: 'input_must_include_kind',
     };
   }
 
   const kind = (input as { kind: unknown }).kind;
+
   if (kind === 'bomb.place') {
     return {
       ok: true,
@@ -65,13 +40,19 @@ function validateBombermanStubInput(input: unknown): InputValidationResult<Bombe
     };
   }
 
-  if (kind === 'move') {
+  if (kind === 'move.intent') {
     const direction = (input as { direction?: unknown }).direction;
-    if (direction === 'up' || direction === 'down' || direction === 'left' || direction === 'right') {
+    if (
+      direction === null ||
+      direction === 'up' ||
+      direction === 'down' ||
+      direction === 'left' ||
+      direction === 'right'
+    ) {
       return {
         ok: true,
         value: {
-          kind: 'move',
+          kind: 'move.intent',
           direction,
         },
       };
@@ -79,7 +60,7 @@ function validateBombermanStubInput(input: unknown): InputValidationResult<Bombe
 
     return {
       ok: false,
-      reason: 'move_input_missing_direction',
+      reason: 'move_intent_requires_valid_direction_or_null',
     };
   }
 
@@ -89,85 +70,120 @@ function validateBombermanStubInput(input: unknown): InputValidationResult<Bombe
   };
 }
 
-export const bombermanStubModule: GameModule<
-  BombermanStubConfig,
-  BombermanStubInput,
-  BombermanStubSnapshot,
-  BombermanStubEvent,
-  BombermanStubResults
+function buildGameResults(state: ReturnType<typeof createBombermanSimulationState>): BombermanGameResults {
+  const rows = state.world
+    .query(['player'])
+    .map((entityId) => state.world.getComponent(entityId, 'player'))
+    .filter((player): player is NonNullable<typeof player> => player !== undefined)
+    .map((player) => ({
+      playerId: player.playerId,
+      alive: player.alive,
+      eliminatedAtTick: player.eliminatedAtTick,
+    }))
+    .sort((a, b) => {
+      if (a.alive !== b.alive) {
+        return a.alive ? -1 : 1;
+      }
+
+      const aTick = a.eliminatedAtTick ?? Number.MAX_SAFE_INTEGER;
+      const bTick = b.eliminatedAtTick ?? Number.MAX_SAFE_INTEGER;
+      if (aTick !== bTick) {
+        return bTick - aTick;
+      }
+
+      return a.playerId.localeCompare(b.playerId);
+    });
+
+  const ranked: BombermanResult[] = rows.map((row, index) => {
+    const rank = index + 1;
+    const score = Math.max(0, rows.length - rank);
+
+    return {
+      playerId: row.playerId,
+      rank,
+      score,
+      alive: row.alive,
+      eliminatedAtTick: row.eliminatedAtTick,
+    };
+  });
+
+  return {
+    winnerPlayerId: state.winnerPlayerId,
+    results: ranked,
+  };
+}
+
+export const bombermanModule: GameModule<
+  BombermanConfig,
+  BombermanInput,
+  BombermanSnapshot,
+  BombermanEvent,
+  BombermanResult[]
 > = {
   gameId: GAME_ID_BOMBERMAN,
 
-  createGame(config: BombermanStubConfig): GameInstance<
-    BombermanStubInput,
-    BombermanStubSnapshot,
-    BombermanStubEvent,
-    BombermanStubResults
+  createGame(config: BombermanConfig, seed: number): GameInstance<
+    BombermanInput,
+    BombermanSnapshot,
+    BombermanEvent,
+    BombermanResult[]
   > {
-    const playerStates = new Map<string, BombermanStubPlayerState>();
-    for (const playerId of config.playerIds) {
-      playerStates.set(playerId, {
-        playerId,
-        lastInput: null,
-      });
-    }
-
-    let simulationTick = 0;
-    let nextEventId = 1;
-    const events: Array<GameEventEnvelope<BombermanStubEvent>> = [];
+    const state = createBombermanSimulationState(config, seed);
 
     return {
-      applyInput(playerId, input, tick): void {
-        const existing = playerStates.get(playerId);
-        if (!existing) {
-          playerStates.set(playerId, {
-            playerId,
-            lastInput: input.kind,
-          });
-        } else {
-          existing.lastInput = input.kind;
+      applyInput(playerId, input): void {
+        const playerEntityId = state.playerEntityIdsByPlayerId.get(playerId);
+        if (!playerEntityId) {
+          return;
         }
 
-        events.push({
-          eventId: nextEventId,
-          tick,
-          event: {
-            kind: 'input.applied',
-            playerId,
-            inputKind: input.kind,
-          },
-        });
-        nextEventId += 1;
+        const player = state.world.getComponent(playerEntityId, 'player');
+        if (!player || !player.alive || state.phase === 'finished') {
+          return;
+        }
+
+        if (input.kind === 'move.intent') {
+          player.desiredDirection = input.direction;
+          return;
+        }
+
+        player.queuedBombPlacement = true;
       },
 
       tick(): void {
-        simulationTick += 1;
+        if (state.phase === 'finished') {
+          return;
+        }
+
+        state.tick += 1;
+
+        runMovementSystem(state);
+        runBombSystem(state);
+        runFlameSystem(state);
+        runEliminationSystem(state);
       },
 
-      getSnapshot(): BombermanStubSnapshot {
-        return {
-          tick: simulationTick,
-          players: [...playerStates.values()].sort((a, b) => a.playerId.localeCompare(b.playerId)),
-        };
+      getSnapshot(): BombermanSnapshot {
+        return buildBombermanSnapshot(state);
       },
 
-      getEventsSince(lastEventId: number): Array<GameEventEnvelope<BombermanStubEvent>> {
-        return events.filter((eventEnvelope) => eventEnvelope.eventId > lastEventId);
+      getEventsSince(lastEventId: number) {
+        return getBombermanEventsSince(state, lastEventId);
       },
 
       isGameOver(): boolean {
-        return false;
+        return state.phase === 'finished';
       },
 
-      getResults(): BombermanStubResults {
-        return {
-          winnerPlayerId: null,
-        };
+      getResults(): BombermanResult[] {
+        return buildGameResults(state).results;
       },
     };
   },
 
-  validateInput(input: unknown): InputValidationResult<BombermanStubInput> {
-    return validateBombermanStubInput(input);
+  validateInput(input: unknown): InputValidationResult<BombermanInput> {
+    return validateBombermanInput(input);
   },
 };
+
+export const bombermanStubModule = bombermanModule;

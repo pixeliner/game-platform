@@ -6,10 +6,10 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "pnpm --filter @game-platform/engine build && tsc -p tsconfig.json",
+    "typecheck": "pnpm --filter @game-platform/engine build && tsc --noEmit -p tsconfig.json",
     "lint": "eslint \"src/**/*.ts\"",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
     "@game-platform/engine": "workspace:*"
