@@ -17,6 +17,7 @@ const validMessages: ProtocolMessage[] = [
       guestId: 'guest-1',
       nickname: 'Alice',
       lobbyName: 'LAN Night',
+      password: 'safe-pass',
     },
   },
   {
@@ -26,7 +27,7 @@ const validMessages: ProtocolMessage[] = [
       lobbyId: 'lobby-1',
       guestId: 'guest-2',
       nickname: 'Bob',
-      sessionToken: 'token-1',
+      password: 'safe-pass',
     },
   },
   {
@@ -73,10 +74,13 @@ const validMessages: ProtocolMessage[] = [
     type: 'lobby.state',
     payload: {
       lobbyId: 'lobby-1',
+      lobbyName: 'LAN Night',
       hostPlayerId: 'player-1',
       phase: 'waiting',
       activeRoomId: null,
       selectedGameId: 'bomberman',
+      requiresPassword: true,
+      maxPlayers: 4,
       players: [
         {
           playerId: 'player-1',
@@ -317,6 +321,26 @@ describe('protocol message codec', () => {
       payload: {
         lobbyId: 'lobby-1',
         nickname: 'Bob',
+      },
+    });
+
+    expect(() => decodeMessage(raw)).toThrow(ProtocolDecodeError);
+
+    const result = safeDecodeMessage(raw);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('invalid_message');
+    }
+  });
+
+  it('rejects malformed payload for lobby.create password shape', () => {
+    const raw = JSON.stringify({
+      v: PROTOCOL_VERSION,
+      type: 'lobby.create',
+      payload: {
+        guestId: 'guest-1',
+        nickname: 'Alice',
+        password: 'abc',
       },
     });
 

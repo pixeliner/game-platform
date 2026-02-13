@@ -8,6 +8,8 @@ const lobbyIdSchema = z.string().min(1).max(64);
 const roomIdSchema = z.string().min(1).max(64);
 const gameIdSchema = z.string().min(1).max(64);
 const chatTextSchema = z.string().min(1).max(1000);
+const lobbyNameSchema = z.string().min(1).max(64);
+const lobbyPasswordSchema = z.string().min(4).max(64);
 
 const lobbyPlayerSchema = z.object({
   playerId: idSchema,
@@ -30,10 +32,13 @@ const lobbyChatMessagePayloadSchema = z.object({
 
 const lobbyStatePayloadSchema = z.object({
   lobbyId: lobbyIdSchema,
+  lobbyName: lobbyNameSchema,
   hostPlayerId: idSchema,
   phase: z.enum(['waiting', 'starting', 'in_game', 'closed']),
   activeRoomId: roomIdSchema.nullable(),
   selectedGameId: gameIdSchema.nullable(),
+  requiresPassword: z.boolean(),
+  maxPlayers: z.number().int().positive(),
   players: z.array(lobbyPlayerSchema),
   votesByPlayerId: z.record(idSchema, gameIdSchema),
 });
@@ -44,7 +49,8 @@ export const lobbyCreateMessageSchema = z.object({
   payload: z.object({
     guestId: idSchema,
     nickname: nicknameSchema,
-    lobbyName: z.string().min(1).max(64).optional(),
+    lobbyName: lobbyNameSchema.optional(),
+    password: lobbyPasswordSchema.optional(),
   }),
 });
 
@@ -56,6 +62,7 @@ export const lobbyJoinMessageSchema = z.object({
     guestId: idSchema,
     nickname: nicknameSchema,
     sessionToken: z.string().min(1).max(2048).optional(),
+    password: lobbyPasswordSchema.optional(),
   }),
 });
 
