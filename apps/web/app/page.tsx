@@ -1,3 +1,6 @@
+import Link from 'next/link';
+
+import { Button } from '@/src/components/ui/button';
 import { CreateLobbyForm } from '@/src/features/lobby/components/create-lobby-form';
 import { JoinLobbyForm } from '@/src/features/lobby/components/join-lobby-form';
 import { resolveGatewayWebSocketUrl } from '@/src/lib/env';
@@ -15,6 +18,17 @@ export default function HomePage(): React.JSX.Element {
         <p className="mt-4 text-xs text-muted-foreground">
           Gateway URL ({gateway.source}): <code>{gateway.value}</code>
         </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link href="/history">History</Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/leaderboard">Leaderboard</Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/stats/me">My Stats</Link>
+          </Button>
+        </div>
       </section>
 
       <section className="grid gap-4 md:grid-cols-2">

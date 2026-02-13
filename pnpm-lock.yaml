@@ -50,6 +50,9 @@ importers:
       '@game-platform/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      '@game-platform/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       ws:
         specifier: ^8.18.1
         version: 8.19.0

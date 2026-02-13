@@ -263,6 +263,7 @@ describe('gateway websocket integration', () => {
       snapshotEveryTicks: 2,
       roomIdleTimeoutMs: 100,
       sessionSecret: 'test-secret',
+      sqlitePath: ':memory:',
     };
 
     server = createGatewayServer({

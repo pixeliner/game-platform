@@ -1,4 +1,5 @@
 import type { BombermanEvent } from '@game-platform/game-bomberman';
+import Link from 'next/link';
 
 import { Badge } from '@/src/components/ui/badge';
 import { Button } from '@/src/components/ui/button';
@@ -107,6 +108,15 @@ export function BombermanHud(props: BombermanHudProps): React.JSX.Element {
             ) : null}
             <Button variant="ghost" size="sm" onClick={props.onBackToLobby}>
               Back to Lobby
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/history">History</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/leaderboard">Leaderboard</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/stats/me">My Stats</Link>
             </Button>
           </div>
         </CardContent>

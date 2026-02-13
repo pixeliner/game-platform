@@ -41,12 +41,14 @@
 - [x] Render snapshots
 
 ## Milestone 7: Persistence (Stats/History)
-- [ ] SQLite repositories
-- [ ] Store match results + per-player stats
-- [ ] Web: history + stats pages
+- [x] SQLite repositories
+- [x] Store match results + per-player stats
+- [x] Web: history + stats pages
 
 ## Later
 - [ ] Powerups + destructible blocks variety
+- [ ] End screen with scoreboard
 - [ ] Reconnect support + late join spectators
 - [ ] Achievements and cosmetics
-- [ ] LAN discovery (mDNS)
+- [ ] Lobby list and password protected lobbies
+- [ ] Debug system, host options/commands, monitoring system for admins

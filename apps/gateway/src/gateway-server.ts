@@ -5,11 +5,14 @@ import {
   encodeMessage,
   safeDecodeMessage,
 } from '@game-platform/protocol';
+import type { MatchRepository } from '@game-platform/storage';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 
 import type { GatewayConfig } from './config.js';
+import { createPersistenceApiHandler } from './http/persistence-api.js';
 import type { LobbyStateMachine } from './lobby/lobby-state-machine.js';
 import { LobbyService } from './lobby/lobby-service.js';
+import { MatchPersistenceService } from './match/match-persistence.js';
 import { GatewayMessageRouter } from './message-router.js';
 import { createDefaultModuleRegistry } from './room/module-registry.js';
 import type { RoomManager } from './room/room-manager.js';
@@ -35,6 +38,7 @@ export interface CreateGatewayServerOptions {
   stateMachine: LobbyStateMachine;
   roomManager: RoomManager;
   sessionTokenService: SessionTokenService;
+  matchRepository: MatchRepository;
 }
 
 export interface GatewayServer {
@@ -61,10 +65,24 @@ function rawDataToText(data: RawData): string {
 }
 
 export function createGatewayServer(options: CreateGatewayServerOptions): GatewayServer {
-  const server = createServer((_, response) => {
-    response.statusCode = 200;
+  const persistenceApi = createPersistenceApiHandler(options.matchRepository);
+  const server = createServer((request, response) => {
+    if (persistenceApi.handle(request, response)) {
+      return;
+    }
+
+    const requestUrl = request.url ?? '/';
+    const path = new URL(requestUrl, 'http://gateway.local').pathname;
+    if (path === '/') {
+      response.statusCode = 200;
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
+    response.statusCode = 404;
     response.setHeader('content-type', 'application/json');
-    response.end(JSON.stringify({ ok: true }));
+    response.end(JSON.stringify({ error: { code: 'not_found', message: 'Route not found.' } }));
   });
 
   const webSocketServer = new WebSocketServer({ server, path: '/ws' });
@@ -145,6 +163,7 @@ export function createGatewayServer(options: CreateGatewayServerOptions): Gatewa
     connectionRegistry,
     transport,
     clock: options.clock,
+    matchPersistenceService: new MatchPersistenceService(options.matchRepository),
     snapshotEveryTicks: options.config.snapshotEveryTicks,
     roomIdleTimeoutMs: options.config.roomIdleTimeoutMs,
   });
@@ -235,6 +254,8 @@ export function createGatewayServer(options: CreateGatewayServerOptions): Gatewa
               reject(serverError);
               return;
             }
+
+            options.matchRepository.close();
 
             resolve();
           });

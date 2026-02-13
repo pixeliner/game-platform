@@ -7,7 +7,7 @@
     "dev": "pnpm --filter @game-platform/protocol build && pnpm --filter @game-platform/game-bomberman build && next dev",
     "build": "pnpm --filter @game-platform/protocol build && pnpm --filter @game-platform/game-bomberman build && next build",
     "start": "next start",
-    "typecheck": "pnpm --filter @game-platform/protocol build && pnpm --filter @game-platform/game-bomberman build && tsc --noEmit -p tsconfig.json",
+    "typecheck": "pnpm --filter @game-platform/protocol build && pnpm --filter @game-platform/game-bomberman build && next typegen && tsc --noEmit -p tsconfig.json",
     "lint": "eslint app src",
     "test": "vitest run --config vitest.config.ts"
   },

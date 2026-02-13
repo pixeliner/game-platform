@@ -15,6 +15,7 @@ import type {
   ConnectionRegistry,
   GatewayConnectionContext,
   GatewayTransport,
+  MatchPersistenceService,
 } from '../types.js';
 import type { ModuleRegistry } from './module-registry.js';
 import type { RoomManager, RoomRecord } from './room-manager.js';
@@ -34,6 +35,7 @@ interface RoomRuntimeManagerDependencies {
   connectionRegistry: ConnectionRegistry;
   transport: GatewayTransport;
   clock: Clock;
+  matchPersistenceService: MatchPersistenceService;
   snapshotEveryTicks: number;
   roomIdleTimeoutMs: number;
   createScheduler?: () => TickScheduler;
@@ -73,6 +75,7 @@ export class RoomRuntimeManager {
   private readonly connectionRegistry: ConnectionRegistry;
   private readonly transport: GatewayTransport;
   private readonly clock: Clock;
+  private readonly matchPersistenceService: MatchPersistenceService;
   private readonly snapshotEveryTicks: number;
   private readonly roomIdleTimeoutMs: number;
   private readonly createScheduler: (() => TickScheduler) | undefined;
@@ -86,6 +89,7 @@ export class RoomRuntimeManager {
     this.connectionRegistry = dependencies.connectionRegistry;
     this.transport = dependencies.transport;
     this.clock = dependencies.clock;
+    this.matchPersistenceService = dependencies.matchPersistenceService;
     this.snapshotEveryTicks = dependencies.snapshotEveryTicks;
     this.roomIdleTimeoutMs = dependencies.roomIdleTimeoutMs;
     this.createScheduler = dependencies.createScheduler;
@@ -151,6 +155,22 @@ export class RoomRuntimeManager {
           },
 
           onGameOver: (emission): void => {
+            try {
+              const rawResults = Array.isArray(emission.results) ? emission.results : [];
+              this.matchPersistenceService.persistCompletedMatch({
+                room,
+                endedAtMs: this.clock.nowMs(),
+                endReason: 'game_over',
+                results: rawResults,
+              });
+            } catch (error) {
+              console.error('Failed to persist completed match', {
+                roomId: room.roomId,
+                matchId: room.matchId,
+                error,
+              });
+            }
+
             const results = Array.isArray(emission.results)
               ? emission.results.filter((item) => isValidGameResultEntry(item))
               : [];

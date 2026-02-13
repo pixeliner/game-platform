@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import type { LobbyStateMessage } from '@game-platform/protocol';
 
@@ -99,6 +100,18 @@ export default function LobbyPage(): React.JSX.Element {
       {connection.state.lastError ? (
         <ErrorBanner error={connection.state.lastError} onDismiss={connection.clearError} />
       ) : null}
+
+      <div className="flex flex-wrap gap-2">
+        <Button asChild variant="outline" size="sm">
+          <Link href="/history">History</Link>
+        </Button>
+        <Button asChild variant="outline" size="sm">
+          <Link href="/leaderboard">Leaderboard</Link>
+        </Button>
+        <Button asChild variant="outline" size="sm">
+          <Link href="/stats/me">My Stats</Link>
+        </Button>
+      </div>
 
       {lobbyState ? (
         <>

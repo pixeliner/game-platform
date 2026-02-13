@@ -1,5 +1,6 @@
 import { createSessionTokenService } from './auth/session-token-service.js';
 import { loadGatewayConfig, type GatewayConfig } from './config.js';
+import { SqliteMatchRepository, type MatchRepository } from '@game-platform/storage';
 import {
   createGatewayServer as createGatewayServerRuntime,
   type CreateGatewayServerOptions,
@@ -21,6 +22,7 @@ export interface GatewayFactoryOptions {
   stateMachine?: LobbyStateMachine;
   roomManager?: RoomManager;
   sessionTokenService?: SessionTokenService;
+  matchRepository?: MatchRepository;
 }
 
 export function createGatewayServer(options: GatewayFactoryOptions = {}): GatewayServer {
@@ -39,6 +41,11 @@ export function createGatewayServer(options: GatewayFactoryOptions = {}): Gatewa
       nowMs: () => clock.nowMs(),
       nextSessionId: () => idGenerator.next('sid'),
     });
+  const matchRepository =
+    options.matchRepository ??
+    new SqliteMatchRepository({
+      dbPath: config.sqlitePath,
+    });
 
   const gatewayOptions: CreateGatewayServerOptions = {
     config,
@@ -47,6 +54,7 @@ export function createGatewayServer(options: GatewayFactoryOptions = {}): Gatewa
     stateMachine,
     roomManager,
     sessionTokenService,
+    matchRepository,
   };
 
   return createGatewayServerRuntime(gatewayOptions);

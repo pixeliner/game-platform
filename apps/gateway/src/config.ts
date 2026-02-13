@@ -9,6 +9,7 @@ export interface GatewayConfig {
   snapshotEveryTicks: number;
   roomIdleTimeoutMs: number;
   sessionSecret: string;
+  sqlitePath: string;
 }
 
 const DEFAULT_HOST = '0.0.0.0';
@@ -18,6 +19,7 @@ const DEFAULT_RECONNECT_GRACE_MS = 120_000;
 const DEFAULT_TICK_RATE = 20;
 const DEFAULT_SNAPSHOT_EVERY_TICKS = 2;
 const DEFAULT_ROOM_IDLE_TIMEOUT_MS = 30_000;
+const DEFAULT_SQLITE_PATH = './.data/game-platform.sqlite';
 
 function readPositiveInt(name: string, rawValue: string | undefined, fallback: number): number {
   if (!rawValue) {
@@ -54,5 +56,6 @@ export function loadGatewayConfig(env: NodeJS.ProcessEnv = process.env): Gateway
       DEFAULT_ROOM_IDLE_TIMEOUT_MS,
     ),
     sessionSecret: env.GATEWAY_SESSION_SECRET ?? randomBytes(32).toString('hex'),
+    sqlitePath: env.GATEWAY_SQLITE_PATH ?? DEFAULT_SQLITE_PATH,
   };
 }

@@ -131,6 +131,34 @@ class FakeTimerController {
   }
 }
 
+class FakeMatchPersistenceService {
+  public readonly calls: Array<{
+    roomId: string;
+    matchId: string;
+    endedAtMs: number;
+    endReason: string;
+    results: unknown[];
+  }> = [];
+
+  public persistCompletedMatch(input: {
+    room: {
+      roomId: string;
+      matchId: string;
+    };
+    endedAtMs: number;
+    endReason: string;
+    results: unknown[];
+  }): void {
+    this.calls.push({
+      roomId: input.room.roomId,
+      matchId: input.room.matchId,
+      endedAtMs: input.endedAtMs,
+      endReason: input.endReason,
+      results: input.results,
+    });
+  }
+}
+
 describe('RoomRuntimeManager', () => {
   function setupHarness() {
     const roomManager = new RoomManager({
@@ -142,6 +170,7 @@ describe('RoomRuntimeManager', () => {
     const transport = new FakeTransport();
     const scheduler = new ManualScheduler();
     const timers = new FakeTimerController();
+    const matchPersistenceService = new FakeMatchPersistenceService();
 
     const manager = new RoomRuntimeManager({
       roomManager,
@@ -151,6 +180,7 @@ describe('RoomRuntimeManager', () => {
       clock: {
         nowMs: () => 1_700_000_000_000,
       },
+      matchPersistenceService,
       snapshotEveryTicks: 2,
       roomIdleTimeoutMs: 30_000,
       createScheduler: () => scheduler,
@@ -159,11 +189,24 @@ describe('RoomRuntimeManager', () => {
     });
 
     const room = roomManager.createRoom({
+      matchId: 'match-1',
       lobbyId: 'lobby-1',
       gameId: 'bomberman',
       tickRate: 20,
       createdAtMs: 1_700_000_000_000,
-      playerIds: ['player-1', 'player-2'],
+      startedAtMs: 1_700_000_000_000,
+      participants: [
+        {
+          playerId: 'player-1',
+          guestId: 'guest-1',
+          nickname: 'Host',
+        },
+        {
+          playerId: 'player-2',
+          guestId: 'guest-2',
+          nickname: 'Guest',
+        },
+      ],
     });
 
     manager.startRoomRuntime(room);
@@ -175,6 +218,7 @@ describe('RoomRuntimeManager', () => {
       transport,
       scheduler,
       timers,
+      matchPersistenceService,
       roomId: room.roomId,
     };
   }
@@ -271,6 +315,102 @@ describe('RoomRuntimeManager', () => {
       },
       direction: 'right',
     });
+  });
+
+  it('persists game-over results when runtime ends a round', () => {
+    const harness = setupHarness();
+    harness.connectionRegistry.setContext({
+      connectionId: 'conn-1',
+      lobbyId: 'lobby-1',
+      playerId: 'player-1',
+      guestId: 'guest-1',
+      nickname: 'Host',
+    });
+    harness.connectionRegistry.setContext({
+      connectionId: 'conn-2',
+      lobbyId: 'lobby-1',
+      playerId: 'player-2',
+      guestId: 'guest-2',
+      nickname: 'Guest',
+    });
+
+    harness.manager.handleGameMessage('conn-1', {
+      v: 1,
+      type: 'game.join',
+      payload: {
+        roomId: harness.roomId,
+        playerId: 'player-1',
+      },
+    });
+    harness.manager.handleGameMessage('conn-2', {
+      v: 1,
+      type: 'game.join',
+      payload: {
+        roomId: harness.roomId,
+        playerId: 'player-2',
+      },
+    });
+
+    harness.manager.handleGameMessage('conn-2', {
+      v: 1,
+      type: 'game.input',
+      payload: {
+        roomId: harness.roomId,
+        playerId: 'player-2',
+        tick: 1,
+        input: {
+          kind: 'move.intent',
+          direction: 'left',
+        },
+      },
+    });
+
+    harness.manager.handleGameMessage('conn-1', {
+      v: 1,
+      type: 'game.input',
+      payload: {
+        roomId: harness.roomId,
+        playerId: 'player-1',
+        tick: 2,
+        input: {
+          kind: 'bomb.place',
+        },
+      },
+    });
+    harness.manager.handleGameMessage('conn-1', {
+      v: 1,
+      type: 'game.input',
+      payload: {
+        roomId: harness.roomId,
+        playerId: 'player-1',
+        tick: 3,
+        input: {
+          kind: 'move.intent',
+          direction: 'right',
+        },
+      },
+    });
+    harness.manager.handleGameMessage('conn-1', {
+      v: 1,
+      type: 'game.input',
+      payload: {
+        roomId: harness.roomId,
+        playerId: 'player-1',
+        tick: 4,
+        input: {
+          kind: 'move.intent',
+          direction: null,
+        },
+      },
+    });
+
+    harness.scheduler.advance(60);
+
+    expect(harness.matchPersistenceService.calls).toHaveLength(1);
+    expect(harness.matchPersistenceService.calls[0]?.roomId).toBe(harness.roomId);
+    expect(harness.matchPersistenceService.calls[0]?.matchId).toBe('match-1');
+    expect(harness.matchPersistenceService.calls[0]?.endReason).toBe('game_over');
+    expect(Array.isArray(harness.matchPersistenceService.calls[0]?.results)).toBe(true);
   });
 
   it('pauses when room has zero connected players and stops after idle timeout', () => {

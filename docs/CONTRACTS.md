@@ -57,3 +57,21 @@
   - matchId, gameId, startedAt, endedAt, lobbyId
   - players: ids, results (rank/score), metadata
   - optional events summary
+
+## Persistence HTTP API
+Gateway exposes read-only analytics endpoints:
+
+- `GET /api/history`
+  - query: `limit` (default 20, max 100), `offset` (default 0), `gameId?`, `guestId?`
+  - response: `{ items, page }`
+- `GET /api/stats/:guestId`
+  - query: `gameId?`, `historyLimit` (default 10, max 50), `historyOffset` (default 0)
+  - response: `{ guestId, latestNickname, overall, byGame, recentMatches, page }`
+- `GET /api/leaderboard`
+  - query: `limit` (default 20, max 100), `offset` (default 0), `gameId?`
+  - response: `{ items, page }`
+
+Ordering semantics:
+- history: `endedAtMs DESC`, then `matchId DESC`
+- leaderboard: `wins DESC`, `totalScore DESC`, `averageRank ASC`, `lastPlayedAtMs DESC`, `guestId ASC`
+- per-match players: `rank ASC`, `guestId ASC`

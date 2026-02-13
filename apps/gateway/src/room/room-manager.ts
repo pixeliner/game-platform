@@ -1,23 +1,34 @@
 import { randomInt } from 'node:crypto';
 
 export interface RoomRecord {
+  matchId: string;
   roomId: string;
   lobbyId: string;
   gameId: string;
   seed: number;
   tickRate: number;
   createdAtMs: number;
+  startedAtMs: number;
   playerIds: string[];
+  participants: RoomParticipant[];
   status: 'active' | 'stopped';
   stoppedAtMs?: number;
 }
 
+export interface RoomParticipant {
+  playerId: string;
+  guestId: string;
+  nickname: string;
+}
+
 interface CreateRoomInput {
+  matchId: string;
   lobbyId: string;
   gameId: string;
   tickRate: number;
   createdAtMs: number;
-  playerIds: string[];
+  startedAtMs: number;
+  participants: RoomParticipant[];
 }
 
 interface RoomManagerOptions {
@@ -36,14 +47,18 @@ export class RoomManager {
   }
 
   public createRoom(input: CreateRoomInput): RoomRecord {
+    const participants = [...input.participants];
     const room: RoomRecord = {
+      matchId: input.matchId,
       roomId: this.nextRoomId(),
       lobbyId: input.lobbyId,
       gameId: input.gameId,
       seed: this.nextSeed(),
       tickRate: input.tickRate,
       createdAtMs: input.createdAtMs,
-      playerIds: [...input.playerIds],
+      startedAtMs: input.startedAtMs,
+      playerIds: participants.map((participant) => participant.playerId),
+      participants,
       status: 'active',
     };
 

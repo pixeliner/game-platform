@@ -271,16 +271,22 @@ export class LobbyService {
       nowMs,
     });
 
-    const connectedPlayerIds = [...lobby.playersById.values()]
+    const connectedParticipants = [...lobby.playersById.values()]
       .filter((player) => player.isConnected)
-      .map((player) => player.playerId);
+      .map((player) => ({
+        playerId: player.playerId,
+        guestId: player.guestId,
+        nickname: player.nickname,
+      }));
 
     const room = this.roomManager.createRoom({
+      matchId: this.idGenerator.next('match'),
       lobbyId: lobby.lobbyId,
       gameId,
       tickRate: this.tickRate,
       createdAtMs: nowMs,
-      playerIds: connectedPlayerIds,
+      startedAtMs: nowMs,
+      participants: connectedParticipants,
     });
 
     this.roomRuntimeManager.startRoomRuntime(room);

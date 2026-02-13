@@ -64,4 +64,13 @@ export interface RoomRuntimeManager {
   stopAll(reason?: string): void;
 }
 
+export interface MatchPersistenceService {
+  persistCompletedMatch(input: {
+    room: RoomRecord;
+    endedAtMs: number;
+    endReason: string;
+    results: unknown[];
+  }): void;
+}
+
 export type LobbyMessageHandler = (connectionId: string, message: LobbyClientMessage) => void;
