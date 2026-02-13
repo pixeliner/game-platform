@@ -42,18 +42,23 @@ main {
 }
 
 .bomberman-stage-shell {
-  @apply arcade-surface relative overflow-hidden p-3;
+  @apply arcade-surface relative p-3;
 }
 
 .bomberman-stage-canvas {
-  @apply flex min-h-[320px] items-center justify-center rounded-md border border-border/70 bg-black/30 p-2;
+  @apply flex min-h-[420px] items-start justify-start overflow-auto rounded-md border border-border/70 bg-black/30 p-2;
+}
+
+.bomberman-stage-host {
+  @apply relative shrink-0;
 }
 
 .bomberman-stage-canvas canvas {
+  display: block;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
-  max-width: 100%;
-  height: auto;
+  width: 100%;
+  height: 100%;
 }
 
 .bomberman-stage-overlay {

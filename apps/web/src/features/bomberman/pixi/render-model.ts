@@ -52,14 +52,47 @@ function compareDrawOrder(a: BombermanDrawInstruction, b: BombermanDrawInstructi
   return a.y - b.y;
 }
 
-function pickPlayerSprite(playerId: string, alive: boolean): BombermanSpriteKey {
-  const isBlue = playerId.localeCompare('m') < 0;
+type PlayerPalette = 'blue' | 'red' | 'yellow' | 'cyan';
+const PLAYER_PALETTE_ORDER: readonly PlayerPalette[] = ['blue', 'red', 'yellow', 'cyan'];
 
-  if (!alive) {
-    return isBlue ? 'player.blue.dead' : 'player.red.dead';
+function buildPlayerPaletteById(snapshot: BombermanSnapshot): ReadonlyMap<string, PlayerPalette> {
+  const playerIds = [...snapshot.players]
+    .map((player) => player.playerId)
+    .sort((a, b) => a.localeCompare(b));
+  const paletteByPlayerId = new Map<string, PlayerPalette>();
+
+  for (const [index, playerId] of playerIds.entries()) {
+    const palette = PLAYER_PALETTE_ORDER[index % PLAYER_PALETTE_ORDER.length] ?? 'blue';
+    paletteByPlayerId.set(playerId, palette);
   }
 
-  return isBlue ? 'player.blue.idle' : 'player.red.idle';
+  return paletteByPlayerId;
+}
+
+function pickPlayerSprite(palette: PlayerPalette, alive: boolean): BombermanSpriteKey {
+  if (alive) {
+    switch (palette) {
+      case 'blue':
+        return 'player.blue.idle';
+      case 'red':
+        return 'player.red.idle';
+      case 'yellow':
+        return 'player.yellow.idle';
+      case 'cyan':
+        return 'player.cyan.idle';
+    }
+  }
+
+  switch (palette) {
+    case 'blue':
+      return 'player.blue.dead';
+    case 'red':
+      return 'player.red.dead';
+    case 'yellow':
+      return 'player.yellow.dead';
+    case 'cyan':
+      return 'player.cyan.dead';
+  }
 }
 
 function pickFlameSprite(flameTiles: ReadonlySet<string>, x: number, y: number): BombermanSpriteKey {
@@ -82,6 +115,7 @@ function pickFlameSprite(flameTiles: ReadonlySet<string>, x: number, y: number):
 export function buildBombermanRenderModel(snapshot: BombermanSnapshot): BombermanRenderModel {
   const draws: BombermanDrawInstruction[] = [];
   const flameTiles = new Set(snapshot.flames.map((flame) => `${flame.x},${flame.y}`));
+  const playerPaletteById = buildPlayerPaletteById(snapshot);
 
   for (let y = 0; y < snapshot.height; y += 1) {
     for (let x = 0; x < snapshot.width; x += 1) {
@@ -141,10 +175,12 @@ export function buildBombermanRenderModel(snapshot: BombermanSnapshot): Bomberma
   }
 
   for (const player of snapshot.players) {
+    const playerPalette = playerPaletteById.get(player.playerId) ?? 'blue';
+
     draws.push({
       id: `player-${player.playerId}`,
       layer: 'players',
-      spriteKey: pickPlayerSprite(player.playerId, player.alive),
+      spriteKey: pickPlayerSprite(playerPalette, player.alive),
       x: player.x,
       y: player.y,
       flipX: player.direction === 'left',

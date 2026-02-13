@@ -161,7 +161,13 @@ export function BombermanGameClient(props: BombermanGameClientProps): React.JSX.
         </div>
 
         <div className="bomberman-stage-shell">
-          <div ref={stageHostRef} className="bomberman-stage-canvas" />
+          <div className="bomberman-stage-canvas">
+            <div
+              ref={stageHostRef}
+              className="bomberman-stage-host"
+              style={{ width: stageWidth, height: stageHeight }}
+            />
+          </div>
           {!snapshot ? (
             <div className="bomberman-stage-overlay">
               Waiting for first server snapshot...

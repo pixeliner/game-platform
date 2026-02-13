@@ -67,4 +67,41 @@ describe('buildBombermanRenderModel', () => {
     expect(flameDrawById.get('flame-1-1')).toBe('flame.horizontal');
     expect(flameDrawById.get('flame-3-2')).toBe('flame.vertical');
   });
+
+  it('assigns deterministic player palettes by sorted player id and alive state', () => {
+    const snapshot = createSnapshot({
+      players: [
+        { playerId: 'd-player', x: 0, y: 0, alive: false, direction: 'down', activeBombCount: 0 },
+        { playerId: 'b-player', x: 1, y: 0, alive: true, direction: 'down', activeBombCount: 0 },
+        { playerId: 'a-player', x: 2, y: 0, alive: true, direction: 'down', activeBombCount: 0 },
+        { playerId: 'c-player', x: 3, y: 0, alive: true, direction: 'down', activeBombCount: 0 },
+      ],
+    });
+
+    const model = buildBombermanRenderModel(snapshot);
+    const playerDrawById = new Map(
+      model.draws
+        .filter((draw) => draw.layer === 'players')
+        .map((draw) => [draw.id, draw.spriteKey]),
+    );
+
+    expect(playerDrawById.get('player-a-player')).toBe('player.blue.idle');
+    expect(playerDrawById.get('player-b-player')).toBe('player.red.idle');
+    expect(playerDrawById.get('player-c-player')).toBe('player.yellow.idle');
+    expect(playerDrawById.get('player-d-player')).toBe('player.cyan.dead');
+  });
+
+  it('uses the expected tile sprite keys for floor and walls', () => {
+    const snapshot = createSnapshot({
+      hardWalls: [{ x: 1, y: 1 }],
+      softBlocks: [{ x: 2, y: 1 }],
+    });
+
+    const model = buildBombermanRenderModel(snapshot);
+    const drawById = new Map(model.draws.map((draw) => [draw.id, draw.spriteKey]));
+
+    expect(drawById.get('floor-0-0')).toBe('tile.floor');
+    expect(drawById.get('hard-1-1')).toBe('tile.wall.hard');
+    expect(drawById.get('soft-2-1')).toBe('tile.wall.soft');
+  });
 });
