@@ -1,0 +1,61 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 204 36% 8%;
+  --foreground: 45 58% 92%;
+  --card: 207 40% 12%;
+  --card-foreground: 45 58% 92%;
+  --primary: 26 96% 58%;
+  --primary-foreground: 204 40% 8%;
+  --secondary: 194 65% 32%;
+  --secondary-foreground: 45 58% 92%;
+  --muted: 204 28% 18%;
+  --muted-foreground: 38 30% 76%;
+  --border: 201 38% 26%;
+  --ring: 26 96% 58%;
+  --destructive: 0 78% 60%;
+  --destructive-foreground: 0 0% 98%;
+  --radius: 0.75rem;
+}
+
+* {
+  @apply border-border;
+}
+
+body {
+  @apply min-h-screen bg-background text-foreground antialiased;
+  background-image: radial-gradient(circle at top, rgba(255, 149, 0, 0.08), transparent 48%);
+}
+
+main {
+  @apply mx-auto w-full max-w-6xl px-4 py-8 md:px-8;
+}
+
+.arcade-surface {
+  @apply rounded-lg border bg-card/90 shadow-panel;
+}
+
+.arcade-grid-bg {
+  @apply bg-arcade-grid;
+}
+
+.bomberman-stage-shell {
+  @apply arcade-surface relative overflow-hidden p-3;
+}
+
+.bomberman-stage-canvas {
+  @apply flex min-h-[320px] items-center justify-center rounded-md border border-border/70 bg-black/30 p-2;
+}
+
+.bomberman-stage-canvas canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  max-width: 100%;
+  height: auto;
+}
+
+.bomberman-stage-overlay {
+  @apply absolute inset-0 flex items-center justify-center bg-background/70 text-sm text-muted-foreground backdrop-blur-[1px];
+}

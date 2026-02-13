@@ -31,14 +31,14 @@
 - [x] Determinism tests
 
 ## Milestone 5: Web UI (Lobby)
-- [ ] Next.js app with shadcn/ui
-- [ ] Lobby screens: create/join, chat, voting, ready
-- [ ] Connect to gateway via ws client
+- [x] Next.js app with shadcn/ui
+- [x] Lobby screens: create/join, chat, voting, ready
+- [x] Connect to gateway via ws client
 
 ## Milestone 6: Web UI (Bomberman Client)
-- [ ] Canvas renderer (2D)
-- [ ] Input capture -> send to server
-- [ ] Render snapshots
+- [x] Canvas renderer (2D)
+- [x] Input capture -> send to server
+- [x] Render snapshots
 
 ## Milestone 7: Persistence (Stats/History)
 - [ ] SQLite repositories

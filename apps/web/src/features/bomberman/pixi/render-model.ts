@@ -1,9 +1,16 @@
 import type { BombermanSnapshot } from '@game-platform/game-bomberman';
 
-import type { BombermanSpriteKey } from './sprite-atlas.js';
-import { BOMBERMAN_TILE_SIZE } from './sprite-atlas.js';
+import type { BombermanSpriteKey } from './sprite-atlas';
+import { BOMBERMAN_TILE_SIZE } from './sprite-atlas';
 
-export type RenderLayer = 'ground' | 'blocks' | 'bombs' | 'flames' | 'players' | 'overlay';
+export type RenderLayer =
+  | 'floor'
+  | 'hardWalls'
+  | 'softBlocks'
+  | 'bombs'
+  | 'flames'
+  | 'players'
+  | 'overlay';
 
 export interface BombermanDrawInstruction {
   id: string;
@@ -25,12 +32,13 @@ export interface BombermanRenderModel {
 
 function compareDrawOrder(a: BombermanDrawInstruction, b: BombermanDrawInstruction): number {
   const layerOrder: Record<RenderLayer, number> = {
-    ground: 0,
-    blocks: 1,
-    bombs: 2,
-    flames: 3,
-    players: 4,
-    overlay: 5,
+    floor: 0,
+    hardWalls: 1,
+    softBlocks: 2,
+    bombs: 3,
+    flames: 4,
+    players: 5,
+    overlay: 6,
   };
 
   if (layerOrder[a.layer] !== layerOrder[b.layer]) {
@@ -54,13 +62,44 @@ function pickPlayerSprite(playerId: string, alive: boolean): BombermanSpriteKey 
   return isBlue ? 'player.blue.idle' : 'player.red.idle';
 }
 
+function pickFlameSprite(flameTiles: ReadonlySet<string>, x: number, y: number): BombermanSpriteKey {
+  const hasLeft = flameTiles.has(`${x - 1},${y}`);
+  const hasRight = flameTiles.has(`${x + 1},${y}`);
+  const hasUp = flameTiles.has(`${x},${y - 1}`);
+  const hasDown = flameTiles.has(`${x},${y + 1}`);
+
+  if ((hasLeft || hasRight) && !(hasUp || hasDown)) {
+    return 'flame.horizontal';
+  }
+
+  if ((hasUp || hasDown) && !(hasLeft || hasRight)) {
+    return 'flame.vertical';
+  }
+
+  return 'flame.center';
+}
+
 export function buildBombermanRenderModel(snapshot: BombermanSnapshot): BombermanRenderModel {
   const draws: BombermanDrawInstruction[] = [];
+  const flameTiles = new Set(snapshot.flames.map((flame) => `${flame.x},${flame.y}`));
+
+  for (let y = 0; y < snapshot.height; y += 1) {
+    for (let x = 0; x < snapshot.width; x += 1) {
+      draws.push({
+        id: `floor-${x}-${y}`,
+        layer: 'floor',
+        spriteKey: 'tile.floor',
+        x,
+        y,
+        flipX: false,
+      });
+    }
+  }
 
   for (const hardWall of snapshot.hardWalls) {
     draws.push({
       id: `hard-${hardWall.x}-${hardWall.y}`,
-      layer: 'ground',
+      layer: 'hardWalls',
       spriteKey: 'tile.wall.hard',
       x: hardWall.x,
       y: hardWall.y,
@@ -71,7 +110,7 @@ export function buildBombermanRenderModel(snapshot: BombermanSnapshot): Bomberma
   for (const softBlock of snapshot.softBlocks) {
     draws.push({
       id: `soft-${softBlock.x}-${softBlock.y}`,
-      layer: 'blocks',
+      layer: 'softBlocks',
       spriteKey: 'tile.wall.soft',
       x: softBlock.x,
       y: softBlock.y,
@@ -94,7 +133,7 @@ export function buildBombermanRenderModel(snapshot: BombermanSnapshot): Bomberma
     draws.push({
       id: `flame-${flame.x}-${flame.y}`,
       layer: 'flames',
-      spriteKey: 'flame.center',
+      spriteKey: pickFlameSprite(flameTiles, flame.x, flame.y),
       x: flame.x,
       y: flame.y,
       flipX: false,

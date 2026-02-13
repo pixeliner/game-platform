@@ -1,4 +1,4 @@
-export const BOMBERMAN_SPRITE_SHEET_PATH = 'assets/games/bomberman/bomberman.png' as const;
+export const BOMBERMAN_SPRITE_SHEET_PATH = '/assets/games/bomberman/bomberman.png' as const;
 
 export const BOMBERMAN_TILE_SIZE = 16 as const;
 

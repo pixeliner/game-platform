@@ -1,7 +1,8 @@
 export function createWebApp(): string {
-  return 'web-app';
+  return 'next-web-app';
 }
 
-export * from './features/bomberman/pixi/create-pixi-bomberman-scene.js';
-export * from './features/bomberman/pixi/render-model.js';
-export * from './features/bomberman/pixi/sprite-atlas.js';
+export * from './features/bomberman/pixi/create-pixi-bomberman-scene';
+export * from './features/bomberman/pixi/render-model';
+export * from './features/bomberman/pixi/sprite-atlas';
+export * from './lib/env';
