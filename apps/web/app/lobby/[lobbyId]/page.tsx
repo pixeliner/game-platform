@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import type { LobbyStateMessage } from '@game-platform/protocol';
@@ -63,6 +63,9 @@ export default function LobbyPage(): React.JSX.Element {
 
   const nicknameHint = searchParams.get('nickname') ?? undefined;
   const createLobbyName = searchParams.get('lobbyName') ?? undefined;
+  const rematchMode = searchParams.get('rematch') === '1';
+  const rematchReadyAttemptRef = useRef<string | null>(null);
+  const rematchStartAttemptRef = useRef<string | null>(null);
 
   const connection = useLobbyConnection({
     routeLobbyId,
@@ -87,6 +90,61 @@ export default function LobbyPage(): React.JSX.Element {
 
   const startDisabledReason = getStartDisabledReason(lobbyState, connection.currentPlayerId);
 
+  useEffect(() => {
+    if (!rematchMode || !lobbyState || !connection.currentPlayerId) {
+      return;
+    }
+
+    if (lobbyState.phase !== 'waiting') {
+      rematchReadyAttemptRef.current = null;
+      rematchStartAttemptRef.current = null;
+      return;
+    }
+
+    const currentLobbyPlayer = lobbyState.players.find((player) => player.playerId === connection.currentPlayerId);
+    if (!currentLobbyPlayer || !currentLobbyPlayer.isConnected) {
+      return;
+    }
+
+    if (!currentLobbyPlayer.isReady) {
+      const readyAttemptKey = `${lobbyState.lobbyId}:${currentLobbyPlayer.playerId}:${lobbyState.phase}`;
+      if (rematchReadyAttemptRef.current !== readyAttemptKey) {
+        rematchReadyAttemptRef.current = readyAttemptKey;
+        connection.setReady(true);
+      }
+      rematchStartAttemptRef.current = null;
+      return;
+    }
+
+    const connectedPlayers = lobbyState.players.filter((player) => player.isConnected);
+    const allConnectedReady = connectedPlayers.every((player) => player.isReady);
+    const canAutoStart = currentLobbyPlayer.isHost &&
+      lobbyState.selectedGameId !== null &&
+      connectedPlayers.length >= 2 &&
+      allConnectedReady;
+
+    if (!canAutoStart) {
+      rematchStartAttemptRef.current = null;
+      return;
+    }
+
+    const startAttemptKey = `${lobbyState.lobbyId}:${lobbyState.selectedGameId}:${connectedPlayers
+      .map((player) => `${player.playerId}:${player.isReady ? '1' : '0'}`)
+      .join(',')}`;
+    if (rematchStartAttemptRef.current === startAttemptKey) {
+      return;
+    }
+
+    rematchStartAttemptRef.current = startAttemptKey;
+    connection.requestStart();
+  }, [
+    connection.currentPlayerId,
+    connection.requestStart,
+    connection.setReady,
+    lobbyState,
+    rematchMode,
+  ]);
+
   return (
     <main className="space-y-4">
       <ConnectionBanner
@@ -99,6 +157,12 @@ export default function LobbyPage(): React.JSX.Element {
 
       {connection.state.lastError ? (
         <ErrorBanner error={connection.state.lastError} onDismiss={connection.clearError} />
+      ) : null}
+
+      {rematchMode ? (
+        <section className="arcade-surface p-3 text-xs text-muted-foreground">
+          Rematch mode is active. This page will auto-ready you and auto-start when all connected players are ready.
+        </section>
       ) : null}
 
       <div className="flex flex-wrap gap-2">

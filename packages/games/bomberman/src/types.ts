@@ -3,6 +3,16 @@ export type BombermanPhase = 'running' | 'finished';
 export type BombermanDirection = 'up' | 'down' | 'left' | 'right';
 export type BombermanMovementModel = 'grid_smooth' | 'true_transit';
 
+export type BombermanPowerupKind =
+  | 'bomb_up'
+  | 'blast_up'
+  | 'speed_up'
+  | 'remote_detonator'
+  | 'kick_bombs'
+  | 'throw_bombs';
+
+export type BombermanDestructibleKind = 'brick' | 'crate' | 'barrel';
+
 export interface TilePosition {
   x: number;
   y: number;
@@ -20,6 +30,12 @@ export type BombermanInput =
     }
   | {
       kind: 'bomb.place';
+    }
+  | {
+      kind: 'bomb.remote_detonate';
+    }
+  | {
+      kind: 'bomb.throw';
     };
 
 export interface BombermanPlayerSnapshot {
@@ -29,6 +45,12 @@ export interface BombermanPlayerSnapshot {
   alive: boolean;
   direction: BombermanDirection | null;
   activeBombCount: number;
+  bombLimit: number;
+  blastRadius: number;
+  speedTier: number;
+  hasRemoteDetonator: boolean;
+  canKickBombs: boolean;
+  canThrowBombs: boolean;
 }
 
 export interface BombermanBombSnapshot {
@@ -37,6 +59,7 @@ export interface BombermanBombSnapshot {
   y: number;
   fuseTicksRemaining: number;
   radius: number;
+  movingDirection: BombermanDirection | null;
 }
 
 export interface BombermanFlameSnapshot {
@@ -46,13 +69,26 @@ export interface BombermanFlameSnapshot {
   sourceOwnerPlayerId: string | null;
 }
 
+export interface BombermanSoftBlockSnapshot {
+  x: number;
+  y: number;
+  kind: BombermanDestructibleKind;
+}
+
+export interface BombermanPowerupSnapshot {
+  x: number;
+  y: number;
+  kind: BombermanPowerupKind;
+}
+
 export interface BombermanSnapshot {
   tick: number;
   phase: BombermanPhase;
   width: number;
   height: number;
   hardWalls: TilePosition[];
-  softBlocks: TilePosition[];
+  softBlocks: BombermanSoftBlockSnapshot[];
+  powerups: BombermanPowerupSnapshot[];
   players: BombermanPlayerSnapshot[];
   bombs: BombermanBombSnapshot[];
   flames: BombermanFlameSnapshot[];
@@ -83,9 +119,46 @@ export type BombermanEvent =
       affectedTiles: TilePosition[];
     }
   | {
+      kind: 'bomb.kicked';
+      byPlayerId: string;
+      ownerPlayerId: string;
+      from: TilePosition;
+      to: TilePosition;
+      direction: BombermanDirection;
+    }
+  | {
+      kind: 'bomb.thrown';
+      byPlayerId: string;
+      ownerPlayerId: string;
+      from: TilePosition;
+      to: TilePosition;
+      direction: BombermanDirection;
+    }
+  | {
+      kind: 'bomb.remote_detonated';
+      playerId: string;
+      x: number;
+      y: number;
+    }
+  | {
       kind: 'block.destroyed';
       x: number;
       y: number;
+      blockKind: BombermanDestructibleKind;
+      droppedPowerupKind: BombermanPowerupKind | null;
+    }
+  | {
+      kind: 'powerup.spawned';
+      x: number;
+      y: number;
+      powerupKind: BombermanPowerupKind;
+    }
+  | {
+      kind: 'powerup.collected';
+      playerId: string;
+      x: number;
+      y: number;
+      powerupKind: BombermanPowerupKind;
     }
   | {
       kind: 'player.eliminated';

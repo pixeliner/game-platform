@@ -28,23 +28,42 @@
 - `game.input.payload.input` for bomberman:
   - `{ kind: "move.intent", direction: "up" | "down" | "left" | "right" | null }`
   - `{ kind: "bomb.place" }`
+  - `{ kind: "bomb.remote_detonate" }`
+  - `{ kind: "bomb.throw" }`
 - `game.event.payload.event` for bomberman:
   - `player.moved`
   - `bomb.placed`
   - `bomb.exploded`
+  - `bomb.kicked`
+  - `bomb.thrown`
+  - `bomb.remote_detonated`
   - `block.destroyed`
+  - `powerup.spawned`
+  - `powerup.collected`
   - `player.eliminated`
   - `round.over`
+  - Drop reveal timing:
+    - `block.destroyed.droppedPowerupKind` communicates the deterministic roll result at destruction time.
+    - The actual pickup is materialized later via `powerup.spawned`, only after flame has cleared from the tile.
 - `game.snapshot.payload.snapshot` for bomberman includes:
   - `tick`, `phase`, `winnerPlayerId`
-  - map dimensions + wall/block tile coordinates
-  - player, bomb, and flame state arrays
+  - map dimensions + wall tile coordinates
+  - soft block entries with variant kind (`brick` | `crate` | `barrel`)
+  - spawned powerups (`bomb_up`, `blast_up`, `speed_up`, `remote_detonator`, `kick_bombs`, `throw_bombs`)
+  - players with progression fields (`bombLimit`, `blastRadius`, `speedTier`, ability booleans)
+  - bombs with movement metadata (`movingDirection`)
+  - flames
 
 ## Identity
 - Client generates guestId (uuid) and nickname
 - Gateway issues short-lived session token for ws reconnect
 - `lobby.join` may include optional `sessionToken` for reconnect intent
 - `lobby.state.players[*]` includes `isConnected` for reconnect visibility
+
+## Rematch Lifecycle
+- Match completion keeps lobby identity and vote selection intact.
+- After `game.over`, gateway transitions lobby phase from `in_game` back to `waiting`.
+- Connected players are reset to `isReady = false` and must ready/start again for a rematch.
 
 ## Game Module Interface (packages/engine)
 - Each module must be deterministic given:

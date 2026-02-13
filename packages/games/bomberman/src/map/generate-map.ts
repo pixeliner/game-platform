@@ -6,15 +6,20 @@ import {
   compareTilePositions,
   toTileKey,
 } from '../constants.js';
-import { DeterministicRandom } from '../random.js';
-import type { TilePosition } from '../types.js';
+import { rollSoftBlockVariant } from '../balance.js';
+import type { DeterministicRandom } from '../random.js';
+import type { BombermanDestructibleKind, TilePosition } from '../types.js';
+
+export interface InitialSoftBlockPosition extends TilePosition {
+  kind: BombermanDestructibleKind;
+}
 
 export interface BombermanMapData {
   width: number;
   height: number;
   hardWallPositions: TilePosition[];
   hardWallKeys: Set<string>;
-  initialSoftBlockPositions: TilePosition[];
+  initialSoftBlockPositions: InitialSoftBlockPosition[];
 }
 
 function isInsideBounds(x: number, y: number): boolean {
@@ -47,11 +52,10 @@ function createSpawnSafeKeys(playerCount: number): Set<string> {
   return safe;
 }
 
-export function generateBombermanMap(seed: number, playerCount: number): BombermanMapData {
-  const random = new DeterministicRandom(seed);
+export function generateBombermanMap(random: DeterministicRandom, playerCount: number): BombermanMapData {
   const hardWallPositions: TilePosition[] = [];
   const hardWallKeys = new Set<string>();
-  const initialSoftBlockPositions: TilePosition[] = [];
+  const initialSoftBlockPositions: InitialSoftBlockPosition[] = [];
   const spawnSafeKeys = createSpawnSafeKeys(playerCount);
 
   for (let y = 0; y < MAP_HEIGHT; y += 1) {
@@ -68,7 +72,11 @@ export function generateBombermanMap(seed: number, playerCount: number): Bomberm
       }
 
       if (random.nextFloat() < SOFT_BLOCK_DENSITY) {
-        initialSoftBlockPositions.push({ x, y });
+        initialSoftBlockPositions.push({
+          x,
+          y,
+          kind: rollSoftBlockVariant(random),
+        });
       }
     }
   }

@@ -43,6 +43,11 @@ interface RoomRuntimeManagerDependencies {
   snapshotEveryTicks: number;
   bombermanMovementModel: BombermanMovementModel;
   roomIdleTimeoutMs: number;
+  onRoomGameOver?: ((input: {
+    lobbyId: string;
+    roomId: string;
+    endedAtMs: number;
+  }) => void) | undefined;
   createScheduler?: () => TickScheduler;
   setTimer?: (fn: () => void, ms: number) => NodeJS.Timeout;
   clearTimer?: (timeout: NodeJS.Timeout) => void;
@@ -84,6 +89,7 @@ export class RoomRuntimeManager {
   private readonly snapshotEveryTicks: number;
   private readonly bombermanMovementModel: BombermanMovementModel;
   private readonly roomIdleTimeoutMs: number;
+  private readonly onRoomGameOver: RoomRuntimeManagerDependencies['onRoomGameOver'];
   private readonly createScheduler: (() => TickScheduler) | undefined;
   private readonly setTimer: (fn: () => void, ms: number) => NodeJS.Timeout;
   private readonly clearTimer: (timeout: NodeJS.Timeout) => void;
@@ -99,6 +105,7 @@ export class RoomRuntimeManager {
     this.snapshotEveryTicks = dependencies.snapshotEveryTicks;
     this.bombermanMovementModel = dependencies.bombermanMovementModel;
     this.roomIdleTimeoutMs = dependencies.roomIdleTimeoutMs;
+    this.onRoomGameOver = dependencies.onRoomGameOver;
     this.createScheduler = dependencies.createScheduler;
     this.setTimer = dependencies.setTimer ?? setTimeout;
     this.clearTimer = dependencies.clearTimer ?? clearTimeout;
@@ -169,11 +176,12 @@ export class RoomRuntimeManager {
           },
 
           onGameOver: (emission): void => {
+            const endedAtMs = this.clock.nowMs();
             try {
               const rawResults = Array.isArray(emission.results) ? emission.results : [];
               this.matchPersistenceService.persistCompletedMatch({
                 room,
-                endedAtMs: this.clock.nowMs(),
+                endedAtMs,
                 endReason: 'game_over',
                 results: rawResults,
               });
@@ -195,12 +203,17 @@ export class RoomRuntimeManager {
               payload: {
                 roomId: emission.roomId,
                 gameId: emission.gameId,
-                endedAtMs: this.clock.nowMs(),
+                endedAtMs,
                 results,
               },
             });
 
             this.markRoomStopped(runtimeEntry);
+            this.onRoomGameOver?.({
+              lobbyId: room.lobbyId,
+              roomId: room.roomId,
+              endedAtMs,
+            });
           },
 
           onStopped: (): void => {

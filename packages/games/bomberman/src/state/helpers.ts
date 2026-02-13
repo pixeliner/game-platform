@@ -1,13 +1,24 @@
 import type { EntityId } from '@game-platform/engine';
 
 import { MAP_HEIGHT, MAP_WIDTH, compareTilePositions, toTileKey } from '../constants.js';
-import type { BombermanDirection, TilePosition } from '../types.js';
+import type {
+  BombermanDirection,
+  BombermanPowerupKind,
+  TilePosition,
+} from '../types.js';
 import type { BombermanSimulationState } from './setup-world.js';
 
 export interface TileBombRecord {
   entityId: EntityId;
   ownerPlayerId: string;
   ownerCanPass: boolean;
+  movingDirection: BombermanDirection | null;
+}
+
+export interface PendingPowerupDropRecord {
+  x: number;
+  y: number;
+  kind: BombermanPowerupKind;
 }
 
 export function isInsideMap(x: number, y: number): boolean {
@@ -34,8 +45,27 @@ export function getSoftBlockEntityIds(state: BombermanSimulationState): EntityId
   return state.world.query(['destructible', 'position']);
 }
 
+export function getPowerupEntityIds(state: BombermanSimulationState): EntityId[] {
+  return state.world.query(['powerup', 'position']);
+}
+
 export function getSoftBlockEntityAt(state: BombermanSimulationState, x: number, y: number): EntityId | undefined {
   for (const entityId of getSoftBlockEntityIds(state)) {
+    const position = state.world.getComponent(entityId, 'position');
+    if (!position) {
+      continue;
+    }
+
+    if (position.x === x && position.y === y) {
+      return entityId;
+    }
+  }
+
+  return undefined;
+}
+
+export function getPowerupEntityAt(state: BombermanSimulationState, x: number, y: number): EntityId | undefined {
+  for (const entityId of getPowerupEntityIds(state)) {
     const position = state.world.getComponent(entityId, 'position');
     if (!position) {
       continue;
@@ -64,10 +94,12 @@ export function getBombEntitiesAt(state: BombermanSimulationState, x: number, y:
         entityId,
         ownerPlayerId: bomb.ownerPlayerId,
         ownerCanPass: bomb.ownerCanPass,
+        movingDirection: bomb.movingDirection,
       });
     }
   }
 
+  records.sort((a, b) => a.entityId - b.entityId);
   return records;
 }
 
@@ -88,6 +120,111 @@ export function getFlameOwnersAt(state: BombermanSimulationState, x: number, y: 
 
   owners.sort((a, b) => a.localeCompare(b));
   return owners;
+}
+
+export function hasFlameAt(state: BombermanSimulationState, x: number, y: number): boolean {
+  for (const entityId of getFlameEntityIds(state)) {
+    const position = state.world.getComponent(entityId, 'position');
+    if (!position) {
+      continue;
+    }
+
+    if (position.x === x && position.y === y) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export function setPendingPowerupDrop(
+  state: BombermanSimulationState,
+  x: number,
+  y: number,
+  kind: BombermanPowerupKind,
+): void {
+  state.pendingPowerupDropsByTileKey.set(toTileKey(x, y), {
+    x,
+    y,
+    kind,
+  });
+}
+
+export function popRevealablePendingPowerupDrops(
+  state: BombermanSimulationState,
+): PendingPowerupDropRecord[] {
+  const revealable: PendingPowerupDropRecord[] = [];
+  const entries = [...state.pendingPowerupDropsByTileKey.entries()].sort((a, b) => {
+    const byY = a[1].y - b[1].y;
+    if (byY !== 0) {
+      return byY;
+    }
+
+    const byX = a[1].x - b[1].x;
+    if (byX !== 0) {
+      return byX;
+    }
+
+    return a[1].kind.localeCompare(b[1].kind);
+  });
+
+  for (const [tileKey, pendingDrop] of entries) {
+    if (hasFlameAt(state, pendingDrop.x, pendingDrop.y)) {
+      continue;
+    }
+
+    revealable.push(pendingDrop);
+    state.pendingPowerupDropsByTileKey.delete(tileKey);
+  }
+
+  return revealable;
+}
+
+export function hasAlivePlayerAt(
+  state: BombermanSimulationState,
+  x: number,
+  y: number,
+  excludePlayerEntityId?: EntityId,
+): boolean {
+  for (const entityId of getPlayerEntityIds(state)) {
+    if (excludePlayerEntityId !== undefined && entityId === excludePlayerEntityId) {
+      continue;
+    }
+
+    const player = state.world.getComponent(entityId, 'player');
+    const position = state.world.getComponent(entityId, 'position');
+    if (!player || !position || !player.alive) {
+      continue;
+    }
+
+    if (position.x === x && position.y === y) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export function isTileOpenForBombMovement(
+  state: BombermanSimulationState,
+  x: number,
+  y: number,
+  movingBombEntityId?: EntityId,
+): boolean {
+  if (!isInsideMap(x, y) || isHardWall(state, x, y)) {
+    return false;
+  }
+
+  if (getSoftBlockEntityAt(state, x, y) !== undefined) {
+    return false;
+  }
+
+  if (hasAlivePlayerAt(state, x, y)) {
+    return false;
+  }
+
+  const bombs = getBombEntitiesAt(state, x, y);
+  return bombs.every((bomb) => bomb.entityId === movingBombEntityId);
 }
 
 export function isTileWalkableForPlayer(
@@ -116,7 +253,7 @@ export function isTileWalkableForPlayer(
   }
 
   for (const bomb of bombs) {
-    if (bomb.ownerPlayerId === playerId && bomb.ownerCanPass) {
+    if (bomb.ownerPlayerId === playerId && bomb.ownerCanPass && bomb.movingDirection === null) {
       const isStandingOnBombTile = playerPosition.x === x && playerPosition.y === y;
       if (isStandingOnBombTile) {
         continue;

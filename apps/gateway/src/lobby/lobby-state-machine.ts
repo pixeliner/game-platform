@@ -250,6 +250,20 @@ export class LobbyStateMachine {
     return lobby;
   }
 
+  public setWaitingAfterGame(lobbyId: string, nowMs: number): LobbyState {
+    const lobby = this.requireLobby(lobbyId);
+    lobby.phase = 'waiting';
+    lobby.updatedAtMs = nowMs;
+
+    for (const player of lobby.playersById.values()) {
+      if (player.isConnected) {
+        player.isReady = false;
+      }
+    }
+
+    return lobby;
+  }
+
   public getLobby(lobbyId: string): LobbyState | undefined {
     return this.lobbies.get(lobbyId);
   }

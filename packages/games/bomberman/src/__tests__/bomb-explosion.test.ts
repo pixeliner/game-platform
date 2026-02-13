@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
+import { FLAME_TICKS } from '../constants.js';
 import { runBombSystem } from '../systems/bomb-system.js';
-import { getSoftBlockEntityAt } from '../state/helpers.js';
+import { runFlameSystem } from '../systems/flame-system.js';
+import { getPowerupEntityAt, getSoftBlockEntityAt } from '../state/helpers.js';
 import { createBombermanSimulationState } from '../state/setup-world.js';
 
 function clearSoftBlockAt(state: ReturnType<typeof createBombermanSimulationState>, x: number, y: number): void {
@@ -25,7 +27,7 @@ describe('bomberman bombs and explosions', () => {
 
     const forcedBlockEntity = state.world.createEntity();
     state.world.addComponent(forcedBlockEntity, 'position', { x: 3, y: 1 });
-    state.world.addComponent(forcedBlockEntity, 'destructible', { destroyedAtTick: null });
+    state.world.addComponent(forcedBlockEntity, 'destructible', { destroyedAtTick: null, kind: 'brick' });
 
     const p1EntityId = state.playerEntityIdsByPlayerId.get('p1');
     if (!p1EntityId) {
@@ -109,6 +111,9 @@ describe('bomberman bombs and explosions', () => {
       fuseTicksRemaining: 1,
       radius: 2,
       ownerCanPass: false,
+      placedAtTick: 1,
+      movingDirection: null,
+      moveCooldownTicks: 0,
     });
 
     const secondBombEntityId = state.world.createEntity();
@@ -118,6 +123,9 @@ describe('bomberman bombs and explosions', () => {
       fuseTicksRemaining: 30,
       radius: 2,
       ownerCanPass: false,
+      placedAtTick: 2,
+      movingDirection: null,
+      moveCooldownTicks: 0,
     });
 
     runBombSystem(state);
@@ -134,5 +142,80 @@ describe('bomberman bombs and explosions', () => {
       .sort();
 
     expect(explodedOwners).toEqual(['p1', 'p2']);
+  });
+
+  it('reveals rolled drops only after flames clear from a destroyed block tile', () => {
+    const state = createBombermanSimulationState(
+      {
+        playerIds: ['p1', 'p2'],
+      },
+      101,
+    );
+
+    clearSoftBlockAt(state, 2, 1);
+    clearSoftBlockAt(state, 3, 1);
+
+    const forcedBlockEntity = state.world.createEntity();
+    state.world.addComponent(forcedBlockEntity, 'position', { x: 3, y: 1 });
+    state.world.addComponent(forcedBlockEntity, 'destructible', { destroyedAtTick: null, kind: 'crate' });
+
+    let rollCallCount = 0;
+    state.random.nextFloat = (): number => {
+      rollCallCount += 1;
+      return 0;
+    };
+
+    const p1EntityId = state.playerEntityIdsByPlayerId.get('p1');
+    if (!p1EntityId) {
+      throw new Error('missing p1 entity');
+    }
+
+    const p1 = state.world.getComponent(p1EntityId, 'player');
+    if (!p1) {
+      throw new Error('missing p1 player');
+    }
+
+    p1.queuedBombPlacement = true;
+    runBombSystem(state);
+
+    const plantedBombEntityId = state.world.query(['bomb']).at(0);
+    if (plantedBombEntityId === undefined) {
+      throw new Error('expected planted bomb');
+    }
+
+    const plantedBomb = state.world.getComponent(plantedBombEntityId, 'bomb');
+    if (!plantedBomb) {
+      throw new Error('missing bomb component');
+    }
+
+    plantedBomb.fuseTicksRemaining = 1;
+    runBombSystem(state);
+
+    expect(rollCallCount).toBeGreaterThanOrEqual(2);
+    expect(getPowerupEntityAt(state, 3, 1)).toBeUndefined();
+    expect(state.events.some((event) => event.event.kind === 'powerup.spawned')).toBe(false);
+
+    for (let index = 0; index < FLAME_TICKS - 1; index += 1) {
+      runFlameSystem(state);
+    }
+    expect(getPowerupEntityAt(state, 3, 1)).toBeUndefined();
+
+    runFlameSystem(state);
+
+    const revealedPowerupEntityId = getPowerupEntityAt(state, 3, 1);
+    expect(revealedPowerupEntityId).toBeDefined();
+
+    const revealedPowerup = revealedPowerupEntityId
+      ? state.world.getComponent(revealedPowerupEntityId, 'powerup')
+      : undefined;
+    expect(revealedPowerup?.kind).toBe('bomb_up');
+
+    const spawnedEvent = state.events.find((event) => event.event.kind === 'powerup.spawned');
+    expect(spawnedEvent?.event.kind).toBe('powerup.spawned');
+    if (spawnedEvent?.event.kind === 'powerup.spawned') {
+      expect(spawnedEvent.event.x).toBe(3);
+      expect(spawnedEvent.event.y).toBe(1);
+      expect(spawnedEvent.event.powerupKind).toBe('bomb_up');
+    }
   });
 });

@@ -36,6 +36,7 @@ const LAYER_ORDER: RenderLayer[] = [
   'floor',
   'hardWalls',
   'softBlocks',
+  'powerups',
   'bombs',
   'flames',
   'players',

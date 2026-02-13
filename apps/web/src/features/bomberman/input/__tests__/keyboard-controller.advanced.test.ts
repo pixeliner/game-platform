@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { KeyboardController } from '../keyboard-controller';
 
-describe('KeyboardController', () => {
-  it('emits movement intent on direction changes and emits null when released', () => {
+describe('KeyboardController advanced inputs', () => {
+  it('emits remote detonate on E non-repeat', () => {
     const onMoveIntent = vi.fn();
     const onBombPlace = vi.fn();
     const onRemoteDetonate = vi.fn();
@@ -16,23 +16,16 @@ describe('KeyboardController', () => {
       onBombThrow,
     });
 
-    controller.handleKeyDown({ key: 'ArrowUp' });
-    controller.handleKeyDown({ key: 'ArrowRight' });
-    controller.handleKeyUp({ key: 'ArrowRight' });
-    controller.handleKeyUp({ key: 'ArrowUp' });
+    controller.handleKeyDown({ key: 'e', repeat: false });
+    controller.handleKeyDown({ key: 'E', repeat: true });
 
-    expect(onMoveIntent.mock.calls).toEqual([
-      ['up'],
-      ['right'],
-      ['up'],
-      [null],
-    ]);
+    expect(onRemoteDetonate).toHaveBeenCalledTimes(1);
     expect(onBombPlace).not.toHaveBeenCalled();
-    expect(onRemoteDetonate).not.toHaveBeenCalled();
     expect(onBombThrow).not.toHaveBeenCalled();
+    expect(onMoveIntent).not.toHaveBeenCalled();
   });
 
-  it('emits bomb placement once for non-repeat keydown', () => {
+  it('emits throw on Shift+Space and does not emit place for the same keydown', () => {
     const onMoveIntent = vi.fn();
     const onBombPlace = vi.fn();
     const onRemoteDetonate = vi.fn();
@@ -45,12 +38,11 @@ describe('KeyboardController', () => {
       onBombThrow,
     });
 
-    controller.handleKeyDown({ key: ' ', repeat: false });
-    controller.handleKeyDown({ key: ' ', repeat: true });
-    controller.handleKeyDown({ key: 'Space', repeat: false });
+    controller.handleKeyDown({ key: ' ', shiftKey: true, repeat: false });
+    controller.handleKeyDown({ key: 'Space', shiftKey: true, repeat: true });
 
-    expect(onBombPlace).toHaveBeenCalledTimes(2);
-    expect(onBombThrow).not.toHaveBeenCalled();
+    expect(onBombThrow).toHaveBeenCalledTimes(1);
+    expect(onBombPlace).not.toHaveBeenCalled();
     expect(onRemoteDetonate).not.toHaveBeenCalled();
     expect(onMoveIntent).not.toHaveBeenCalled();
   });

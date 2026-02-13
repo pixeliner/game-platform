@@ -45,6 +45,8 @@ export function runEliminationSystem(state: BombermanSimulationState): void {
     player.eliminatedAtTick = state.tick;
     player.desiredDirection = null;
     player.queuedBombPlacement = false;
+    player.queuedRemoteDetonation = false;
+    player.queuedBombThrow = false;
 
     pushBombermanEvent(state, {
       kind: 'player.eliminated',

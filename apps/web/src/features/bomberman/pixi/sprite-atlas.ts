@@ -5,7 +5,15 @@ export const BOMBERMAN_TILE_SIZE = 36 as const;
 export type BombermanSpriteKey =
   | 'tile.floor'
   | 'tile.wall.hard'
-  | 'tile.wall.soft'
+  | 'tile.wall.soft.brick'
+  | 'tile.wall.soft.crate'
+  | 'tile.wall.soft.barrel'
+  | 'powerup.bomb_up'
+  | 'powerup.blast_up'
+  | 'powerup.speed_up'
+  | 'powerup.remote_detonator'
+  | 'powerup.kick_bombs'
+  | 'powerup.throw_bombs'
   | 'bomb.frame.1'
   | 'bomb.frame.2'
   | 'bomb.frame.3'
@@ -43,7 +51,17 @@ export const BOMBERMAN_SPRITE_FRAMES: Readonly<Record<BombermanSpriteKey, Sprite
   // Tiles.
   'tile.floor': frame(219, 209),
   'tile.wall.hard': frame(175, 209),
-  'tile.wall.soft': frame(57, 254),
+  'tile.wall.soft.brick': frame(57, 254),
+  'tile.wall.soft.crate': frame(99, 254),
+  'tile.wall.soft.barrel': frame(259, 209),
+
+  // Powerups.
+  'powerup.bomb_up': frame(6, 299),
+  'powerup.blast_up': frame(40, 299),
+  'powerup.speed_up': frame(74, 299),
+  'powerup.remote_detonator': frame(53, 431),
+  'powerup.kick_bombs': frame(95, 431),
+  'powerup.throw_bombs': frame(138, 431),
 
   // Core effects.
   'bomb.frame.1': frame(6, 135),

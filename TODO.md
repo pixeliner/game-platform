@@ -3,7 +3,7 @@
 ## Milestone 0: Tooling & Repo
 - [x] Create Turborepo + TypeScript workspace layout
 - [x] Add lint/format (eslint + prettier) + tsconfig base
-- [x] Add test runner (vitest) per package + CI pipeline (later)
+- [x] Add test runner (vitest) per package
 
 ## Milestone 1: Protocol & Contracts
 - [x] packages/protocol: zod schemas for lobby + game messages
@@ -46,15 +46,15 @@
 - [x] Web: history + stats pages
 
 ## Milestone 8: Bomberman Gameplay Expansion
-- [ ] Add powerups (extra bombs, blast radius, speed)
-- [ ] Add advanced powerups (remote detonation, kick bombs, throw bombs)
-- [ ] Add destructible block variety and deterministic drop rules
-- [ ] Add balancing config + determinism/invariant tests
+- [x] Add powerups (extra bombs, blast radius, speed)
+- [x] Add advanced powerups (remote detonation, kick bombs, throw bombs)
+- [x] Add destructible block variety and deterministic drop rules
+- [x] Add balancing config + determinism/invariant tests
 
 ## Milestone 9: Match UX & End Screen
-- [ ] Add end-of-round screen with scoreboard
+- [x] Add end-of-round screen with scoreboard
 - [ ] Show ranking, score, and elimination timeline
-- [ ] Add post-match actions (back to lobby / rematch-ready flow)
+- [x] Add post-match actions (back to lobby / rematch-ready flow)
 
 ## Milestone 10: Reconnect + Spectators
 - [ ] Improve reconnect flow for active games (stateful rejoin UX)
@@ -75,3 +75,8 @@
 - [ ] Add debug command system for host/admin actions
 - [ ] Add host options and runtime controls (tick rate, start/stop, kick, etc.)
 - [ ] Add monitoring/diagnostics surface for admins
+
+## Milestone 14: CI Pipeline
+- [ ] Add CI pipeline for lint, typecheck, and tests across workspace
+- [ ] Cache pnpm/turbo artifacts for faster feedback
+- [ ] Add branch protection checks for gateway + web + games packages

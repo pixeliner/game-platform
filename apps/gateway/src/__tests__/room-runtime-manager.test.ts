@@ -171,6 +171,11 @@ describe('RoomRuntimeManager', () => {
     const scheduler = new ManualScheduler();
     const timers = new FakeTimerController();
     const matchPersistenceService = new FakeMatchPersistenceService();
+    const roomGameOverCalls: Array<{
+      lobbyId: string;
+      roomId: string;
+      endedAtMs: number;
+    }> = [];
 
     const manager = new RoomRuntimeManager({
       roomManager,
@@ -184,6 +189,9 @@ describe('RoomRuntimeManager', () => {
       snapshotEveryTicks: 2,
       bombermanMovementModel: movementModel,
       roomIdleTimeoutMs: 30_000,
+      onRoomGameOver: (input) => {
+        roomGameOverCalls.push(input);
+      },
       createScheduler: () => scheduler,
       setTimer: timers.setTimer,
       clearTimer: timers.clearTimer,
@@ -220,6 +228,7 @@ describe('RoomRuntimeManager', () => {
       scheduler,
       timers,
       matchPersistenceService,
+      roomGameOverCalls,
       roomId: room.roomId,
     };
   }
@@ -466,6 +475,13 @@ describe('RoomRuntimeManager', () => {
     expect(harness.matchPersistenceService.calls[0]?.matchId).toBe('match-1');
     expect(harness.matchPersistenceService.calls[0]?.endReason).toBe('game_over');
     expect(Array.isArray(harness.matchPersistenceService.calls[0]?.results)).toBe(true);
+    expect(harness.roomGameOverCalls).toEqual([
+      {
+        lobbyId: 'lobby-1',
+        roomId: harness.roomId,
+        endedAtMs: 1_700_000_000_000,
+      },
+    ]);
   });
 
   it('pauses when room has zero connected players and stops after idle timeout', () => {

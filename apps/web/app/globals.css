@@ -45,6 +45,30 @@ main {
   @apply arcade-surface relative p-3;
 }
 
+.bomberman-loadout-strip {
+  @apply mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/70 bg-background/45 px-3 py-2 text-xs;
+}
+
+.bomberman-loadout-values {
+  @apply flex flex-wrap items-center gap-3 text-muted-foreground;
+}
+
+.bomberman-loadout-values strong {
+  @apply text-foreground;
+}
+
+.bomberman-loadout-badges {
+  @apply flex flex-wrap items-center gap-1;
+}
+
+.bomberman-legend-strip {
+  @apply mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border border-border/70 bg-background/30 px-3 py-2 text-[11px] text-muted-foreground;
+}
+
+.bomberman-legend-strip strong {
+  @apply text-foreground;
+}
+
 .bomberman-stage-canvas {
   @apply flex min-h-[420px] items-start justify-start overflow-auto rounded-md border border-border/70 bg-black/30 p-2;
 }
@@ -63,4 +87,8 @@ main {
 
 .bomberman-stage-overlay {
   @apply absolute inset-0 flex items-center justify-center bg-background/70 text-sm text-muted-foreground backdrop-blur-[1px];
+}
+
+.bomberman-gameover-overlay {
+  @apply absolute inset-0 flex items-center justify-center bg-background/80 p-4 backdrop-blur-[1px];
 }

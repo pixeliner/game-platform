@@ -3,6 +3,7 @@ import type { BombermanDirection } from '@game-platform/game-bomberman';
 export interface KeyEventLike {
   key: string;
   repeat?: boolean;
+  shiftKey?: boolean;
   preventDefault?: () => void;
 }
 
@@ -14,6 +15,8 @@ export interface KeyboardControllerTarget {
 export interface KeyboardControllerHandlers {
   onMoveIntent: (direction: BombermanDirection | null) => void;
   onBombPlace: () => void;
+  onRemoteDetonate: () => void;
+  onBombThrow: () => void;
 }
 
 const KEY_TO_DIRECTION: Readonly<Record<string, BombermanDirection>> = {
@@ -86,7 +89,19 @@ export class KeyboardController {
     if (normalizedKey === 'space') {
       event.preventDefault?.();
       if (!event.repeat) {
-        this.handlers.onBombPlace();
+        if (event.shiftKey) {
+          this.handlers.onBombThrow();
+        } else {
+          this.handlers.onBombPlace();
+        }
+      }
+      return;
+    }
+
+    if (normalizedKey === 'e') {
+      event.preventDefault?.();
+      if (!event.repeat) {
+        this.handlers.onRemoteDetonate();
       }
       return;
     }

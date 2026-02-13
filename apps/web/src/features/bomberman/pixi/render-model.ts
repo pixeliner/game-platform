@@ -1,4 +1,7 @@
-import type { BombermanSnapshot } from '@game-platform/game-bomberman';
+import type {
+  BombermanPowerupKind,
+  BombermanSnapshot,
+} from '@game-platform/game-bomberman';
 
 import type { BombermanSpriteKey } from './sprite-atlas';
 import { BOMBERMAN_TILE_SIZE } from './sprite-atlas';
@@ -7,6 +10,7 @@ export type RenderLayer =
   | 'floor'
   | 'hardWalls'
   | 'softBlocks'
+  | 'powerups'
   | 'bombs'
   | 'flames'
   | 'players'
@@ -36,10 +40,11 @@ function compareDrawOrder(a: BombermanDrawInstruction, b: BombermanDrawInstructi
     floor: 0,
     hardWalls: 1,
     softBlocks: 2,
-    bombs: 3,
-    flames: 4,
-    players: 5,
-    overlay: 6,
+    powerups: 3,
+    bombs: 4,
+    flames: 5,
+    players: 6,
+    overlay: 7,
   };
 
   if (layerOrder[a.layer] !== layerOrder[b.layer]) {
@@ -93,6 +98,34 @@ function pickPlayerSprite(palette: PlayerPalette, alive: boolean): BombermanSpri
       return 'player.yellow.dead';
     case 'cyan':
       return 'player.cyan.dead';
+  }
+}
+
+function pickSoftBlockSprite(kind: BombermanSnapshot['softBlocks'][number]['kind']): BombermanSpriteKey {
+  switch (kind) {
+    case 'brick':
+      return 'tile.wall.soft.brick';
+    case 'crate':
+      return 'tile.wall.soft.crate';
+    case 'barrel':
+      return 'tile.wall.soft.barrel';
+  }
+}
+
+function pickPowerupSprite(kind: BombermanPowerupKind): BombermanSpriteKey {
+  switch (kind) {
+    case 'bomb_up':
+      return 'powerup.bomb_up';
+    case 'blast_up':
+      return 'powerup.blast_up';
+    case 'speed_up':
+      return 'powerup.speed_up';
+    case 'remote_detonator':
+      return 'powerup.remote_detonator';
+    case 'kick_bombs':
+      return 'powerup.kick_bombs';
+    case 'throw_bombs':
+      return 'powerup.throw_bombs';
   }
 }
 
@@ -205,9 +238,21 @@ export function buildBombermanRenderModel(snapshot: BombermanSnapshot): Bomberma
     draws.push({
       id: `soft-${softBlock.x}-${softBlock.y}`,
       layer: 'softBlocks',
-      spriteKey: 'tile.wall.soft',
+      spriteKey: pickSoftBlockSprite(softBlock.kind),
       x: softBlock.x,
       y: softBlock.y,
+      flipX: false,
+      flipY: false,
+    });
+  }
+
+  for (const powerup of snapshot.powerups) {
+    draws.push({
+      id: `powerup-${powerup.x}-${powerup.y}`,
+      layer: 'powerups',
+      spriteKey: pickPowerupSprite(powerup.kind),
+      x: powerup.x,
+      y: powerup.y,
       flipX: false,
       flipY: false,
     });

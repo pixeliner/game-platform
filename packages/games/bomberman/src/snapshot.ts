@@ -5,10 +5,53 @@ import type { BombermanSimulationState } from './state/setup-world.js';
 export function buildBombermanSnapshot(state: BombermanSimulationState): BombermanSnapshot {
   const softBlocks = state.world
     .query(['destructible', 'position'])
-    .map((entityId) => state.world.getComponent(entityId, 'position'))
-    .filter((position): position is { x: number; y: number } => position !== undefined)
-    .sort(compareTilePositions)
-    .map((position) => ({ x: position.x, y: position.y }));
+    .map((entityId) => {
+      const destructible = state.world.getComponent(entityId, 'destructible');
+      const position = state.world.getComponent(entityId, 'position');
+      if (!destructible || !position) {
+        return undefined;
+      }
+
+      return {
+        x: position.x,
+        y: position.y,
+        kind: destructible.kind,
+      };
+    })
+    .filter((position): position is NonNullable<typeof position> => position !== undefined)
+    .sort((a, b) => {
+      const tile = compareTilePositions(a, b);
+      if (tile !== 0) {
+        return tile;
+      }
+
+      return a.kind.localeCompare(b.kind);
+    });
+
+  const powerups = state.world
+    .query(['powerup', 'position'])
+    .map((entityId) => {
+      const powerup = state.world.getComponent(entityId, 'powerup');
+      const position = state.world.getComponent(entityId, 'position');
+      if (!powerup || !position) {
+        return undefined;
+      }
+
+      return {
+        x: position.x,
+        y: position.y,
+        kind: powerup.kind,
+      };
+    })
+    .filter((powerup): powerup is NonNullable<typeof powerup> => powerup !== undefined)
+    .sort((a, b) => {
+      const tile = compareTilePositions(a, b);
+      if (tile !== 0) {
+        return tile;
+      }
+
+      return a.kind.localeCompare(b.kind);
+    });
 
   const players = state.world
     .query(['player', 'position'])
@@ -24,8 +67,14 @@ export function buildBombermanSnapshot(state: BombermanSimulationState): Bomberm
         x: player.renderX,
         y: player.renderY,
         alive: player.alive,
-        direction: player.desiredDirection,
+        direction: player.desiredDirection ?? player.lastFacingDirection,
         activeBombCount: player.activeBombCount,
+        bombLimit: player.bombLimit,
+        blastRadius: player.blastRadius,
+        speedTier: player.speedTier,
+        hasRemoteDetonator: player.hasRemoteDetonator,
+        canKickBombs: player.canKickBombs,
+        canThrowBombs: player.canThrowBombs,
       };
     })
     .filter((player): player is NonNullable<typeof player> => player !== undefined)
@@ -46,19 +95,20 @@ export function buildBombermanSnapshot(state: BombermanSimulationState): Bomberm
         y: position.y,
         fuseTicksRemaining: bomb.fuseTicksRemaining,
         radius: bomb.radius,
+        movingDirection: bomb.movingDirection,
       };
     })
     .filter((bomb): bomb is NonNullable<typeof bomb> => bomb !== undefined)
     .sort((a, b) => {
-      if (a.ownerPlayerId !== b.ownerPlayerId) {
-        return a.ownerPlayerId.localeCompare(b.ownerPlayerId);
+      if (a.y !== b.y) {
+        return a.y - b.y;
       }
 
-      if (a.y === b.y) {
+      if (a.x !== b.x) {
         return a.x - b.x;
       }
 
-      return a.y - b.y;
+      return a.ownerPlayerId.localeCompare(b.ownerPlayerId);
     });
 
   const flames = state.world
@@ -93,6 +143,7 @@ export function buildBombermanSnapshot(state: BombermanSimulationState): Bomberm
     height: state.map.height,
     hardWalls: state.map.hardWallPositions.map((position) => ({ x: position.x, y: position.y })),
     softBlocks,
+    powerups,
     players,
     bombs,
     flames,

@@ -11,6 +11,7 @@ import {
   initializePlayerMovementState,
   startPlayerSegment,
   syncRenderToTile,
+  tryKickBombInDirection,
   type BombermanMovementStrategy,
 } from './movement-strategy.js';
 
@@ -35,6 +36,8 @@ export const gridSmoothMovementStrategy: BombermanMovementStrategy = {
         const nextX = position.x + delta.dx;
         const nextY = position.y + delta.dy;
 
+        player.lastFacingDirection = player.desiredDirection;
+
         if (isTileWalkableForPlayer(state, entityId, player.playerId, nextX, nextY)) {
           const fromX = position.x;
           const fromY = position.y;
@@ -52,6 +55,19 @@ export const gridSmoothMovementStrategy: BombermanMovementStrategy = {
             to: { x: nextX, y: nextY },
             direction: player.desiredDirection,
           });
+        } else {
+          const kicked = tryKickBombInDirection(
+            state,
+            entityId,
+            player,
+            nextX,
+            nextY,
+            player.desiredDirection,
+          );
+
+          if (kicked) {
+            player.moveCooldownTicks = 1;
+          }
         }
       }
 

@@ -3,6 +3,7 @@ import {
   encodeMessage,
   type GameEventMessage,
   type GameJoinAcceptedMessage,
+  type GameOverMessage,
   type GameSnapshotMessage,
   type LobbyAuthIssuedMessage,
   type LobbyErrorMessage,
@@ -142,6 +143,10 @@ function isGameSnapshot(message: ProtocolMessage): message is GameSnapshotMessag
 
 function isGameEvent(message: ProtocolMessage): message is GameEventMessage {
   return message.type === 'game.event';
+}
+
+function isGameOver(message: ProtocolMessage): message is GameOverMessage {
+  return message.type === 'game.over';
 }
 
 async function setupTwoPlayerLobby(url: string): Promise<LobbySetup> {
@@ -505,6 +510,135 @@ describe('gateway websocket integration', () => {
         message.payload.tick >= 2,
     );
     expect(periodicSnapshot.payload.tick % 2).toBe(0);
+  });
+
+  it('returns lobby to waiting after game over and supports rematch start', async () => {
+    const setup = await setupTwoPlayerLobby(url);
+    clients.push(setup.host.socket, setup.guest.socket);
+    const firstStart = await startBombermanRoom(setup);
+
+    send(setup.host, {
+      v: 1,
+      type: 'game.join',
+      payload: {
+        roomId: firstStart.payload.roomId,
+        playerId: setup.hostPlayerId,
+      },
+    });
+    await waitForMessage(setup.host, isGameJoinAccepted);
+    await waitForMessage(setup.host, isGameSnapshot);
+
+    send(setup.guest, {
+      v: 1,
+      type: 'game.join',
+      payload: {
+        roomId: firstStart.payload.roomId,
+        playerId: setup.guestPlayerId,
+      },
+    });
+    await waitForMessage(setup.guest, isGameJoinAccepted);
+    await waitForMessage(setup.guest, isGameSnapshot);
+
+    send(setup.guest, {
+      v: 1,
+      type: 'game.input',
+      payload: {
+        roomId: firstStart.payload.roomId,
+        playerId: setup.guestPlayerId,
+        tick: 1,
+        input: {
+          kind: 'move.intent',
+          direction: 'left',
+        },
+      },
+    });
+    send(setup.host, {
+      v: 1,
+      type: 'game.input',
+      payload: {
+        roomId: firstStart.payload.roomId,
+        playerId: setup.hostPlayerId,
+        tick: 2,
+        input: {
+          kind: 'bomb.place',
+        },
+      },
+    });
+    send(setup.host, {
+      v: 1,
+      type: 'game.input',
+      payload: {
+        roomId: firstStart.payload.roomId,
+        playerId: setup.hostPlayerId,
+        tick: 3,
+        input: {
+          kind: 'move.intent',
+          direction: 'right',
+        },
+      },
+    });
+    send(setup.host, {
+      v: 1,
+      type: 'game.input',
+      payload: {
+        roomId: firstStart.payload.roomId,
+        playerId: setup.hostPlayerId,
+        tick: 4,
+        input: {
+          kind: 'move.intent',
+          direction: null,
+        },
+      },
+    });
+
+    await waitForMessage(setup.host, isGameOver, 8_000);
+
+    const waitingState = await waitForMessage(
+      setup.host,
+      (message): message is LobbyStateMessage =>
+        isLobbyState(message) &&
+        message.payload.lobbyId === setup.lobbyId &&
+        message.payload.phase === 'waiting',
+      8_000,
+    );
+    expect(waitingState.payload.players.filter((player) => player.isConnected).every((player) => !player.isReady)).toBe(
+      true,
+    );
+
+    send(setup.host, {
+      v: 1,
+      type: 'lobby.ready.set',
+      payload: {
+        lobbyId: setup.lobbyId,
+        playerId: setup.hostPlayerId,
+        isReady: true,
+      },
+    });
+    await waitForMessage(setup.host, isLobbyState);
+    await waitForMessage(setup.guest, isLobbyState);
+
+    send(setup.guest, {
+      v: 1,
+      type: 'lobby.ready.set',
+      payload: {
+        lobbyId: setup.lobbyId,
+        playerId: setup.guestPlayerId,
+        isReady: true,
+      },
+    });
+    await waitForMessage(setup.host, isLobbyState);
+    await waitForMessage(setup.guest, isLobbyState);
+
+    send(setup.host, {
+      v: 1,
+      type: 'lobby.start.request',
+      payload: {
+        lobbyId: setup.lobbyId,
+        requestedByPlayerId: setup.hostPlayerId,
+      },
+    });
+    const rematchStart = await waitForMessage(setup.host, isStartAccepted);
+    expect(rematchStart.payload.roomId).not.toBe(firstStart.payload.roomId);
   });
 
   it('stops idle rooms and rejects late game.join', async () => {

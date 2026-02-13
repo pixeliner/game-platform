@@ -51,8 +51,18 @@ function formatEvent(event: BombermanEvent): string {
       return `${event.playerId} placed bomb at (${event.x}, ${event.y})`;
     case 'bomb.exploded':
       return `${event.ownerPlayerId} bomb exploded at (${event.x}, ${event.y})`;
+    case 'bomb.kicked':
+      return `${event.byPlayerId} kicked bomb ${event.direction}`;
+    case 'bomb.thrown':
+      return `${event.byPlayerId} threw bomb to (${event.to.x}, ${event.to.y})`;
+    case 'bomb.remote_detonated':
+      return `${event.playerId} remote detonated bomb at (${event.x}, ${event.y})`;
     case 'block.destroyed':
-      return `Block destroyed at (${event.x}, ${event.y})`;
+      return `Block (${event.blockKind}) destroyed at (${event.x}, ${event.y})`;
+    case 'powerup.spawned':
+      return `Powerup ${event.powerupKind} spawned at (${event.x}, ${event.y})`;
+    case 'powerup.collected':
+      return `${event.playerId} collected ${event.powerupKind}`;
     case 'player.eliminated':
       return `${event.playerId} eliminated`;
     case 'round.over':
@@ -64,6 +74,7 @@ function formatEvent(event: BombermanEvent): string {
 
 export function BombermanHud(props: BombermanHudProps): React.JSX.Element {
   const players = props.state.latestSnapshot?.players ?? [];
+  const currentPlayer = players.find((player) => player.playerId === props.playerId);
   const recentEvents = props.state.recentEvents.slice(-8).reverse();
   const showReconnect = props.state.connectionStatus === 'disconnected' || props.state.connectionStatus === 'error';
 
@@ -163,6 +174,44 @@ export function BombermanHud(props: BombermanHudProps): React.JSX.Element {
                 </Badge>
               </div>
             ))
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Your Loadout</CardTitle>
+          <CardDescription>Current progression from collected powerups.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          {!currentPlayer ? (
+            <p className="text-muted-foreground">Waiting for player snapshot...</p>
+          ) : (
+            <>
+              <div className="flex items-center justify-between rounded border border-border/70 bg-background/50 px-3 py-2">
+                <span>Bomb Limit</span>
+                <span>{currentPlayer.bombLimit}</span>
+              </div>
+              <div className="flex items-center justify-between rounded border border-border/70 bg-background/50 px-3 py-2">
+                <span>Blast Radius</span>
+                <span>{currentPlayer.blastRadius}</span>
+              </div>
+              <div className="flex items-center justify-between rounded border border-border/70 bg-background/50 px-3 py-2">
+                <span>Speed Tier</span>
+                <span>{currentPlayer.speedTier}</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant={currentPlayer.hasRemoteDetonator ? 'success' : 'outline'}>
+                  Remote
+                </Badge>
+                <Badge variant={currentPlayer.canKickBombs ? 'success' : 'outline'}>
+                  Kick
+                </Badge>
+                <Badge variant={currentPlayer.canThrowBombs ? 'success' : 'outline'}>
+                  Throw
+                </Badge>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

@@ -11,6 +11,7 @@ function createSnapshot(partial?: Partial<BombermanSnapshot>): BombermanSnapshot
     height: 3,
     hardWalls: [],
     softBlocks: [],
+    powerups: [],
     players: [],
     bombs: [],
     flames: [],
@@ -23,9 +24,23 @@ describe('buildBombermanRenderModel', () => {
   it('includes floor tiles for the full map and keeps deterministic layer ordering', () => {
     const snapshot = createSnapshot({
       hardWalls: [{ x: 1, y: 1 }],
-      softBlocks: [{ x: 2, y: 1 }],
-      bombs: [{ ownerPlayerId: 'p1', x: 1, y: 2, fuseTicksRemaining: 20, radius: 2 }],
-      players: [{ playerId: 'p1', x: 1, y: 1, alive: true, direction: 'left', activeBombCount: 1 }],
+      softBlocks: [{ x: 2, y: 1, kind: 'brick' }],
+      powerups: [{ x: 3, y: 1, kind: 'bomb_up' }],
+      bombs: [{ ownerPlayerId: 'p1', x: 1, y: 2, fuseTicksRemaining: 20, radius: 2, movingDirection: null }],
+      players: [{
+        playerId: 'p1',
+        x: 1,
+        y: 1,
+        alive: true,
+        direction: 'left',
+        activeBombCount: 1,
+        bombLimit: 1,
+        blastRadius: 2,
+        speedTier: 0,
+        hasRemoteDetonator: false,
+        canKickBombs: false,
+        canThrowBombs: false,
+      }],
     });
 
     const model = buildBombermanRenderModel(snapshot);
@@ -34,10 +49,11 @@ describe('buildBombermanRenderModel', () => {
       floor: 0,
       hardWalls: 1,
       softBlocks: 2,
-      bombs: 3,
-      flames: 4,
-      players: 5,
-      overlay: 6,
+      powerups: 3,
+      bombs: 4,
+      flames: 5,
+      players: 6,
+      overlay: 7,
     } as const;
 
     expect(model.draws.filter((draw) => draw.layer === 'floor')).toHaveLength(
@@ -73,10 +89,10 @@ describe('buildBombermanRenderModel', () => {
   it('uses deterministic bomb pulse frames from fuse ticks', () => {
     const snapshot = createSnapshot({
       bombs: [
-        { ownerPlayerId: 'p1', x: 0, y: 0, fuseTicksRemaining: 40, radius: 2 },
-        { ownerPlayerId: 'p2', x: 1, y: 0, fuseTicksRemaining: 39, radius: 2 },
-        { ownerPlayerId: 'p3', x: 2, y: 0, fuseTicksRemaining: 38, radius: 2 },
-        { ownerPlayerId: 'p4', x: 3, y: 0, fuseTicksRemaining: 37, radius: 2 },
+        { ownerPlayerId: 'p1', x: 0, y: 0, fuseTicksRemaining: 40, radius: 2, movingDirection: null },
+        { ownerPlayerId: 'p2', x: 1, y: 0, fuseTicksRemaining: 39, radius: 2, movingDirection: null },
+        { ownerPlayerId: 'p3', x: 2, y: 0, fuseTicksRemaining: 38, radius: 2, movingDirection: null },
+        { ownerPlayerId: 'p4', x: 3, y: 0, fuseTicksRemaining: 37, radius: 2, movingDirection: null },
       ],
     });
 
@@ -96,10 +112,62 @@ describe('buildBombermanRenderModel', () => {
   it('assigns deterministic player palettes by sorted player id and alive state', () => {
     const snapshot = createSnapshot({
       players: [
-        { playerId: 'd-player', x: 0, y: 0, alive: false, direction: 'down', activeBombCount: 0 },
-        { playerId: 'b-player', x: 1, y: 0, alive: true, direction: 'down', activeBombCount: 0 },
-        { playerId: 'a-player', x: 2, y: 0, alive: true, direction: 'down', activeBombCount: 0 },
-        { playerId: 'c-player', x: 3, y: 0, alive: true, direction: 'down', activeBombCount: 0 },
+        {
+          playerId: 'd-player',
+          x: 0,
+          y: 0,
+          alive: false,
+          direction: 'down',
+          activeBombCount: 0,
+          bombLimit: 1,
+          blastRadius: 2,
+          speedTier: 0,
+          hasRemoteDetonator: false,
+          canKickBombs: false,
+          canThrowBombs: false,
+        },
+        {
+          playerId: 'b-player',
+          x: 1,
+          y: 0,
+          alive: true,
+          direction: 'down',
+          activeBombCount: 0,
+          bombLimit: 1,
+          blastRadius: 2,
+          speedTier: 0,
+          hasRemoteDetonator: false,
+          canKickBombs: false,
+          canThrowBombs: false,
+        },
+        {
+          playerId: 'a-player',
+          x: 2,
+          y: 0,
+          alive: true,
+          direction: 'down',
+          activeBombCount: 0,
+          bombLimit: 1,
+          blastRadius: 2,
+          speedTier: 0,
+          hasRemoteDetonator: false,
+          canKickBombs: false,
+          canThrowBombs: false,
+        },
+        {
+          playerId: 'c-player',
+          x: 3,
+          y: 0,
+          alive: true,
+          direction: 'down',
+          activeBombCount: 0,
+          bombLimit: 1,
+          blastRadius: 2,
+          speedTier: 0,
+          hasRemoteDetonator: false,
+          canKickBombs: false,
+          canThrowBombs: false,
+        },
       ],
     });
 
@@ -116,10 +184,20 @@ describe('buildBombermanRenderModel', () => {
     expect(playerDrawById.get('player-d-player')).toBe('player.cyan.dead');
   });
 
-  it('uses the expected tile sprite keys for floor and walls', () => {
+  it('uses the expected tile and powerup sprite keys', () => {
     const snapshot = createSnapshot({
       hardWalls: [{ x: 1, y: 1 }],
-      softBlocks: [{ x: 2, y: 1 }],
+      softBlocks: [
+        { x: 0, y: 1, kind: 'brick' },
+        { x: 2, y: 1, kind: 'crate' },
+        { x: 3, y: 1, kind: 'barrel' },
+      ],
+      powerups: [
+        { x: 0, y: 2, kind: 'bomb_up' },
+        { x: 1, y: 2, kind: 'blast_up' },
+        { x: 2, y: 2, kind: 'speed_up' },
+        { x: 3, y: 2, kind: 'throw_bombs' },
+      ],
     });
 
     const model = buildBombermanRenderModel(snapshot);
@@ -127,6 +205,12 @@ describe('buildBombermanRenderModel', () => {
 
     expect(drawById.get('floor-0-0')).toBe('tile.floor');
     expect(drawById.get('hard-1-1')).toBe('tile.wall.hard');
-    expect(drawById.get('soft-2-1')).toBe('tile.wall.soft');
+    expect(drawById.get('soft-0-1')).toBe('tile.wall.soft.brick');
+    expect(drawById.get('soft-2-1')).toBe('tile.wall.soft.crate');
+    expect(drawById.get('soft-3-1')).toBe('tile.wall.soft.barrel');
+    expect(drawById.get('powerup-0-2')).toBe('powerup.bomb_up');
+    expect(drawById.get('powerup-1-2')).toBe('powerup.blast_up');
+    expect(drawById.get('powerup-2-2')).toBe('powerup.speed_up');
+    expect(drawById.get('powerup-3-2')).toBe('powerup.throw_bombs');
   });
 });

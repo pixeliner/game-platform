@@ -1,43 +1,57 @@
 import type { EntityId } from '@game-platform/engine';
 
 import {
-  BOMB_BLAST_RADIUS,
   BOMB_FUSE_TICKS,
+  BOMB_THROW_RANGE_TILES,
   DIRECTION_VECTORS,
   FLAME_TICKS,
-  PLAYER_BOMB_LIMIT,
   toTileKey,
 } from '../constants.js';
+import { rollPowerupDrop } from '../balance.js';
 import { pushBombermanEvent } from '../events.js';
 import {
+  directionToDelta,
   getBombEntitiesAt,
   getBombEntityIds,
+  getFlameOwnersAt,
   getPlayerEntityIds,
+  getPowerupEntityAt,
   getSoftBlockEntityAt,
   isHardWall,
   isInsideMap,
+  isTileOpenForBombMovement,
+  setPendingPowerupDrop,
 } from '../state/helpers.js';
 import type { BombermanSimulationState } from '../state/setup-world.js';
 import type { TilePosition } from '../types.js';
 
 export function runBombSystem(state: BombermanSimulationState): void {
+  const initialExplosions: EntityId[] = [];
+
   placeQueuedBombs(state);
+  processThrowRequests(state);
+  processRemoteDetonationRequests(state, initialExplosions);
   updateOwnerPassThrough(state);
 
-  const bombIdsToExplode: EntityId[] = [];
   for (const bombEntityId of getBombEntityIds(state)) {
     const bomb = state.world.getComponent(bombEntityId, 'bomb');
-    if (!bomb) {
+    const position = state.world.getComponent(bombEntityId, 'position');
+    if (!bomb || !position) {
       continue;
     }
 
     bomb.fuseTicksRemaining -= 1;
     if (bomb.fuseTicksRemaining <= 0) {
-      bombIdsToExplode.push(bombEntityId);
+      initialExplosions.push(bombEntityId);
+      continue;
+    }
+
+    if (getFlameOwnersAt(state, position.x, position.y).length > 0) {
+      initialExplosions.push(bombEntityId);
     }
   }
 
-  processExplosions(state, bombIdsToExplode);
+  processExplosions(state, initialExplosions);
 }
 
 function placeQueuedBombs(state: BombermanSimulationState): void {
@@ -50,7 +64,7 @@ function placeQueuedBombs(state: BombermanSimulationState): void {
 
     player.queuedBombPlacement = false;
 
-    if (player.activeBombCount >= PLAYER_BOMB_LIMIT) {
+    if (player.activeBombCount >= player.bombLimit) {
       continue;
     }
 
@@ -66,8 +80,11 @@ function placeQueuedBombs(state: BombermanSimulationState): void {
     state.world.addComponent(bombEntityId, 'bomb', {
       ownerPlayerId: player.playerId,
       fuseTicksRemaining: BOMB_FUSE_TICKS,
-      radius: BOMB_BLAST_RADIUS,
+      radius: player.blastRadius,
       ownerCanPass: true,
+      placedAtTick: state.tick,
+      movingDirection: null,
+      moveCooldownTicks: 0,
     });
 
     player.activeBombCount += 1;
@@ -78,7 +95,134 @@ function placeQueuedBombs(state: BombermanSimulationState): void {
       x: position.x,
       y: position.y,
       fuseTicksRemaining: BOMB_FUSE_TICKS,
-      radius: BOMB_BLAST_RADIUS,
+      radius: player.blastRadius,
+    });
+  }
+}
+
+function processThrowRequests(state: BombermanSimulationState): void {
+  for (const playerEntityId of getPlayerEntityIds(state)) {
+    const player = state.world.getComponent(playerEntityId, 'player');
+    const position = state.world.getComponent(playerEntityId, 'position');
+    if (!player || !position || !player.alive || !player.queuedBombThrow) {
+      continue;
+    }
+
+    player.queuedBombThrow = false;
+
+    if (!player.canThrowBombs) {
+      continue;
+    }
+
+    const direction = player.desiredDirection ?? player.lastFacingDirection;
+    const delta = directionToDelta(direction);
+
+    const sameTileBomb = getBombEntitiesAt(state, position.x, position.y)
+      .find((record) => record.movingDirection === null);
+    const frontBomb = sameTileBomb
+      ? undefined
+      : getBombEntitiesAt(state, position.x + delta.dx, position.y + delta.dy)
+          .find((record) => record.movingDirection === null);
+    const bombRecord = sameTileBomb ?? frontBomb;
+
+    if (!bombRecord) {
+      continue;
+    }
+
+    const bomb = state.world.getComponent(bombRecord.entityId, 'bomb');
+    const bombPosition = state.world.getComponent(bombRecord.entityId, 'position');
+    if (!bomb || !bombPosition) {
+      continue;
+    }
+
+    let landingX = bombPosition.x;
+    let landingY = bombPosition.y;
+
+    for (let step = 1; step <= BOMB_THROW_RANGE_TILES; step += 1) {
+      const nextX = bombPosition.x + delta.dx * step;
+      const nextY = bombPosition.y + delta.dy * step;
+
+      if (!isTileOpenForBombMovement(state, nextX, nextY, bombRecord.entityId)) {
+        break;
+      }
+
+      landingX = nextX;
+      landingY = nextY;
+    }
+
+    if (landingX === bombPosition.x && landingY === bombPosition.y) {
+      continue;
+    }
+
+    const fromX = bombPosition.x;
+    const fromY = bombPosition.y;
+
+    bombPosition.x = landingX;
+    bombPosition.y = landingY;
+    bomb.movingDirection = null;
+    bomb.moveCooldownTicks = 0;
+    bomb.ownerCanPass = false;
+
+    pushBombermanEvent(state, {
+      kind: 'bomb.thrown',
+      byPlayerId: player.playerId,
+      ownerPlayerId: bomb.ownerPlayerId,
+      from: { x: fromX, y: fromY },
+      to: { x: landingX, y: landingY },
+      direction,
+    });
+  }
+}
+
+function processRemoteDetonationRequests(state: BombermanSimulationState, queue: EntityId[]): void {
+  for (const playerEntityId of getPlayerEntityIds(state)) {
+    const player = state.world.getComponent(playerEntityId, 'player');
+    if (!player || !player.alive || !player.queuedRemoteDetonation) {
+      continue;
+    }
+
+    player.queuedRemoteDetonation = false;
+
+    if (!player.hasRemoteDetonator) {
+      continue;
+    }
+
+    const targetBomb = getBombEntityIds(state)
+      .map((bombEntityId) => {
+        const bomb = state.world.getComponent(bombEntityId, 'bomb');
+        const position = state.world.getComponent(bombEntityId, 'position');
+        if (!bomb || !position || bomb.ownerPlayerId !== player.playerId) {
+          return undefined;
+        }
+
+        return {
+          bombEntityId,
+          placedAtTick: bomb.placedAtTick,
+          x: position.x,
+          y: position.y,
+        };
+      })
+      .filter((candidate): candidate is NonNullable<typeof candidate> => candidate !== undefined)
+      .sort((a, b) => {
+        if (a.placedAtTick !== b.placedAtTick) {
+          return a.placedAtTick - b.placedAtTick;
+        }
+
+        return a.bombEntityId - b.bombEntityId;
+      })
+      .at(0);
+
+    if (!targetBomb) {
+      continue;
+    }
+
+    queue.push(targetBomb.bombEntityId);
+
+    pushBombermanEvent(state, {
+      kind: 'bomb.remote_detonated',
+      playerId: player.playerId,
+      x: targetBomb.x,
+      y: targetBomb.y,
     });
   }
 }
@@ -87,7 +231,7 @@ function updateOwnerPassThrough(state: BombermanSimulationState): void {
   for (const bombEntityId of getBombEntityIds(state)) {
     const bomb = state.world.getComponent(bombEntityId, 'bomb');
     const bombPosition = state.world.getComponent(bombEntityId, 'position');
-    if (!bomb || !bombPosition || !bomb.ownerCanPass) {
+    if (!bomb || !bombPosition || !bomb.ownerCanPass || bomb.movingDirection !== null) {
       continue;
     }
 
@@ -139,12 +283,24 @@ function processExplosions(state: BombermanSimulationState, initialQueue: Entity
     for (const tile of affectedTiles) {
       const softBlockEntityId = getSoftBlockEntityAt(state, tile.x, tile.y);
       if (softBlockEntityId !== undefined) {
+        const block = state.world.getComponent(softBlockEntityId, 'destructible');
+        const blockKind = block?.kind ?? 'brick';
+
         state.world.destroyEntity(softBlockEntityId);
+
+        const droppedPowerupKind = rollPowerupDrop(state.random, blockKind);
+
         pushBombermanEvent(state, {
           kind: 'block.destroyed',
           x: tile.x,
           y: tile.y,
+          blockKind,
+          droppedPowerupKind,
         });
+
+        if (droppedPowerupKind !== null) {
+          setPendingPowerupDrop(state, tile.x, tile.y, droppedPowerupKind);
+        }
       }
 
       addOrRefreshFlame(state, tile.x, tile.y, bomb.ownerPlayerId);
@@ -219,6 +375,11 @@ function addOrRefreshFlame(
   y: number,
   sourceOwnerPlayerId: string,
 ): void {
+  const existingPowerup = getPowerupEntityAt(state, x, y);
+  if (existingPowerup !== undefined) {
+    state.world.destroyEntity(existingPowerup);
+  }
+
   const existingFlameEntityIds = state.world
     .query(['flame', 'position'])
     .filter((entityId) => {

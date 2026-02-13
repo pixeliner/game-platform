@@ -176,4 +176,56 @@ describe('LobbyStateMachine', () => {
     expect(started.gameId).toBe('bomberman');
     expect(started.lobby.phase).toBe('starting');
   });
+
+  it('returns lobby to waiting and resets readiness after game completion', () => {
+    const machine = new LobbyStateMachine();
+
+    machine.createLobby({
+      lobbyId: 'lobby-1',
+      playerId: 'player-1',
+      guestId: 'guest-1',
+      nickname: 'Host',
+      nowMs: 1,
+    });
+    machine.joinLobby({
+      lobbyId: 'lobby-1',
+      playerId: 'player-2',
+      guestId: 'guest-2',
+      nickname: 'Guest',
+      nowMs: 2,
+    });
+
+    machine.castVote({
+      lobbyId: 'lobby-1',
+      playerId: 'player-1',
+      gameId: 'bomberman',
+      nowMs: 3,
+    });
+    machine.setReady({
+      lobbyId: 'lobby-1',
+      playerId: 'player-1',
+      isReady: true,
+      nowMs: 4,
+    });
+    machine.setReady({
+      lobbyId: 'lobby-1',
+      playerId: 'player-2',
+      isReady: true,
+      nowMs: 5,
+    });
+
+    machine.requestStart({
+      lobbyId: 'lobby-1',
+      requestedByPlayerId: 'player-1',
+      nowMs: 6,
+    });
+    machine.setInGame('lobby-1', 7);
+
+    const resetLobby = machine.setWaitingAfterGame('lobby-1', 8);
+
+    expect(resetLobby.phase).toBe('waiting');
+    expect(resetLobby.selectedGameId).toBe('bomberman');
+    expect(resetLobby.playersById.get('player-1')?.isReady).toBe(false);
+    expect(resetLobby.playersById.get('player-2')?.isReady).toBe(false);
+  });
 });

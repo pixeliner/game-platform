@@ -50,7 +50,7 @@ describe('bomberman movement and collision', () => {
 
     const forcedSoftBlock = state.world.createEntity();
     state.world.addComponent(forcedSoftBlock, 'position', { x: 2, y: 1 });
-    state.world.addComponent(forcedSoftBlock, 'destructible', { destroyedAtTick: null });
+    state.world.addComponent(forcedSoftBlock, 'destructible', { destroyedAtTick: null, kind: 'brick' });
 
     player.desiredDirection = 'right';
     player.moveCooldownTicks = 0;

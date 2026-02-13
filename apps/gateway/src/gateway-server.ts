@@ -157,6 +157,8 @@ export function createGatewayServer(options: CreateGatewayServerOptions): Gatewa
     },
   };
 
+  let lobbyService: LobbyService | undefined;
+
   const roomRuntimeManager = new RoomRuntimeManager({
     roomManager: options.roomManager,
     moduleRegistry: createDefaultModuleRegistry(),
@@ -167,9 +169,12 @@ export function createGatewayServer(options: CreateGatewayServerOptions): Gatewa
     snapshotEveryTicks: options.config.snapshotEveryTicks,
     bombermanMovementModel: options.config.bombermanMovementModel,
     roomIdleTimeoutMs: options.config.roomIdleTimeoutMs,
+    onRoomGameOver: ({ lobbyId }) => {
+      lobbyService?.handleRoomGameOver(lobbyId);
+    },
   });
 
-  const lobbyService = new LobbyService({
+  lobbyService = new LobbyService({
     stateMachine: options.stateMachine,
     roomManager: options.roomManager,
     sessionTokenService: options.sessionTokenService,

@@ -322,6 +322,16 @@ export class LobbyService {
     this.scheduleEviction(context.lobbyId, context.playerId);
   }
 
+  public handleRoomGameOver(lobbyId: string): void {
+    const lobby = this.stateMachine.getLobby(lobbyId);
+    if (!lobby) {
+      return;
+    }
+
+    this.stateMachine.setWaitingAfterGame(lobbyId, this.clock.nowMs());
+    this.broadcastLobbyState(lobbyId);
+  }
+
   public sendInvalidMessage(connectionId: string, message: string, details?: unknown): void {
     this.sendError(connectionId, {
       code: 'invalid_message',

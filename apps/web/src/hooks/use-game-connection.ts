@@ -8,6 +8,7 @@ import {
 } from '@game-platform/protocol';
 import type {
   BombermanDirection,
+  BombermanPowerupKind,
   BombermanEvent,
   BombermanSnapshot,
 } from '@game-platform/game-bomberman';
@@ -40,6 +41,8 @@ export interface UseGameConnectionResult {
   playerId: string | null;
   sendMoveIntent: (direction: BombermanDirection | null) => void;
   placeBomb: () => void;
+  remoteDetonateBomb: () => void;
+  throwBomb: () => void;
   reconnectNow: () => void;
   leaveGame: () => void;
   clearError: () => void;
@@ -54,6 +57,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isDirection(value: unknown): value is BombermanDirection {
   return value === 'up' || value === 'down' || value === 'left' || value === 'right';
+}
+
+function isPowerupKind(value: unknown): value is BombermanPowerupKind {
+  return (
+    value === 'bomb_up' ||
+    value === 'blast_up' ||
+    value === 'speed_up' ||
+    value === 'remote_detonator' ||
+    value === 'kick_bombs' ||
+    value === 'throw_bombs'
+  );
 }
 
 function isTilePosition(value: unknown): value is { x: number; y: number } {
@@ -81,7 +95,34 @@ function isBombermanSnapshot(value: unknown): value is BombermanSnapshot {
     return false;
   }
 
-  if (!Array.isArray(value.softBlocks) || !value.softBlocks.every(isTilePosition)) {
+  if (
+    !Array.isArray(value.softBlocks) ||
+    !value.softBlocks.every((softBlock) => {
+      if (!isRecord(softBlock)) {
+        return false;
+      }
+
+      return (
+        typeof softBlock.x === 'number' &&
+        typeof softBlock.y === 'number' &&
+        (softBlock.kind === 'brick' || softBlock.kind === 'crate' || softBlock.kind === 'barrel')
+      );
+    })
+  ) {
+    return false;
+  }
+
+  if (
+    !Array.isArray(value.powerups) ||
+    !value.powerups.every((powerup) => {
+      return (
+        isRecord(powerup) &&
+        typeof powerup.x === 'number' &&
+        typeof powerup.y === 'number' &&
+        isPowerupKind(powerup.kind)
+      );
+    })
+  ) {
     return false;
   }
 
@@ -98,6 +139,12 @@ function isBombermanSnapshot(value: unknown): value is BombermanSnapshot {
         typeof player.y === 'number' &&
         typeof player.alive === 'boolean' &&
         typeof player.activeBombCount === 'number' &&
+        typeof player.bombLimit === 'number' &&
+        typeof player.blastRadius === 'number' &&
+        typeof player.speedTier === 'number' &&
+        typeof player.hasRemoteDetonator === 'boolean' &&
+        typeof player.canKickBombs === 'boolean' &&
+        typeof player.canThrowBombs === 'boolean' &&
         (player.direction === null || isDirection(player.direction))
       );
     })
@@ -117,7 +164,8 @@ function isBombermanSnapshot(value: unknown): value is BombermanSnapshot {
         typeof bomb.x === 'number' &&
         typeof bomb.y === 'number' &&
         typeof bomb.fuseTicksRemaining === 'number' &&
-        typeof bomb.radius === 'number'
+        typeof bomb.radius === 'number' &&
+        (bomb.movingDirection === null || isDirection(bomb.movingDirection))
       );
     })
   ) {
@@ -178,8 +226,41 @@ function isBombermanEvent(value: unknown): value is BombermanEvent {
         Array.isArray(value.affectedTiles) &&
         value.affectedTiles.every(isTilePosition)
       );
+    case 'bomb.kicked':
+    case 'bomb.thrown':
+      return (
+        typeof value.byPlayerId === 'string' &&
+        typeof value.ownerPlayerId === 'string' &&
+        isTilePosition(value.from) &&
+        isTilePosition(value.to) &&
+        isDirection(value.direction)
+      );
+    case 'bomb.remote_detonated':
+      return (
+        typeof value.playerId === 'string' &&
+        typeof value.x === 'number' &&
+        typeof value.y === 'number'
+      );
     case 'block.destroyed':
-      return typeof value.x === 'number' && typeof value.y === 'number';
+      return (
+        typeof value.x === 'number' &&
+        typeof value.y === 'number' &&
+        (value.blockKind === 'brick' || value.blockKind === 'crate' || value.blockKind === 'barrel') &&
+        (value.droppedPowerupKind === null || isPowerupKind(value.droppedPowerupKind))
+      );
+    case 'powerup.spawned':
+      return (
+        typeof value.x === 'number' &&
+        typeof value.y === 'number' &&
+        isPowerupKind(value.powerupKind)
+      );
+    case 'powerup.collected':
+      return (
+        typeof value.playerId === 'string' &&
+        typeof value.x === 'number' &&
+        typeof value.y === 'number' &&
+        isPowerupKind(value.powerupKind)
+      );
     case 'player.eliminated':
       return (
         typeof value.playerId === 'string' &&
@@ -675,6 +756,18 @@ export function useGameConnection(options: UseGameConnectionOptions): UseGameCon
     });
   }, [sendInput]);
 
+  const remoteDetonateBomb = useCallback(() => {
+    sendInput({
+      kind: 'bomb.remote_detonate',
+    });
+  }, [sendInput]);
+
+  const throwBomb = useCallback(() => {
+    sendInput({
+      kind: 'bomb.throw',
+    });
+  }, [sendInput]);
+
   const leaveGame = useCallback(() => {
     const auth = stateRef.current.auth;
     const joinAccepted = stateRef.current.joinAccepted;
@@ -725,6 +818,8 @@ export function useGameConnection(options: UseGameConnectionOptions): UseGameCon
     playerId: state.auth?.playerId ?? null,
     sendMoveIntent,
     placeBomb,
+    remoteDetonateBomb,
+    throwBomb,
     reconnectNow,
     leaveGame,
     clearError,

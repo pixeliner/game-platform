@@ -8,6 +8,7 @@ import {
   MAP_WIDTH,
 } from '@game-platform/game-bomberman';
 
+import { Badge } from '@/src/components/ui/badge';
 import { Button } from '@/src/components/ui/button';
 import {
   Card,
@@ -40,6 +41,7 @@ export function BombermanGameClient(props: BombermanGameClientProps): React.JSX.
   });
 
   const snapshot = connection.state.latestSnapshot;
+  const currentPlayer = snapshot?.players.find((player) => player.playerId === connection.playerId) ?? null;
   const stageWidth = (snapshot?.width ?? MAP_WIDTH) * BOMBERMAN_TILE_SIZE;
   const stageHeight = (snapshot?.height ?? MAP_HEIGHT) * BOMBERMAN_TILE_SIZE;
 
@@ -128,6 +130,8 @@ export function BombermanGameClient(props: BombermanGameClientProps): React.JSX.
     const controller = new KeyboardController({
       onMoveIntent: connection.sendMoveIntent,
       onBombPlace: connection.placeBomb,
+      onRemoteDetonate: connection.remoteDetonateBomb,
+      onBombThrow: connection.throwBomb,
     });
 
     controller.attach(window);
@@ -135,12 +139,22 @@ export function BombermanGameClient(props: BombermanGameClientProps): React.JSX.
     return () => {
       controller.detach(true);
     };
-  }, [connection.placeBomb, connection.sendMoveIntent]);
+  }, [connection.placeBomb, connection.remoteDetonateBomb, connection.sendMoveIntent, connection.throwBomb]);
 
   const backToLobby = useCallback(() => {
     connection.leaveGame();
     if (lobbyId) {
       router.push(`/lobby/${encodeURIComponent(lobbyId)}`);
+      return;
+    }
+
+    router.push('/');
+  }, [connection.leaveGame, lobbyId, router]);
+
+  const retryRound = useCallback(() => {
+    connection.leaveGame();
+    if (lobbyId) {
+      router.push(`/lobby/${encodeURIComponent(lobbyId)}?rematch=1`);
       return;
     }
 
@@ -169,11 +183,61 @@ export function BombermanGameClient(props: BombermanGameClientProps): React.JSX.
         <div className="arcade-surface p-3">
           <h1 className="text-xl font-semibold tracking-tight">Bomberman Match</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Use <code>WASD</code> or arrow keys to move. Press <code>Space</code> to place bombs.
+            Use <code>WASD</code> or arrow keys to move. <code>Space</code> places bombs, <code>E</code> remote-detonates, <code>Shift+Space</code> throws.
           </p>
         </div>
 
         <div className="bomberman-stage-shell">
+          <div className="bomberman-loadout-strip">
+            <div className="bomberman-loadout-values">
+              <span>
+                Bombs:{' '}
+                <strong>
+                  {currentPlayer ? `${currentPlayer.activeBombCount}/${currentPlayer.bombLimit}` : '--'}
+                </strong>
+              </span>
+              <span>
+                Blast: <strong>{currentPlayer ? currentPlayer.blastRadius : '--'}</strong>
+              </span>
+              <span>
+                Speed: <strong>{currentPlayer ? currentPlayer.speedTier : '--'}</strong>
+              </span>
+            </div>
+            <div className="bomberman-loadout-badges">
+              <Badge variant={currentPlayer?.hasRemoteDetonator ? 'success' : 'outline'}>
+                Remote
+              </Badge>
+              <Badge variant={currentPlayer?.canKickBombs ? 'success' : 'outline'}>
+                Kick
+              </Badge>
+              <Badge variant={currentPlayer?.canThrowBombs ? 'success' : 'outline'}>
+                Throw
+              </Badge>
+            </div>
+          </div>
+
+          <div className="bomberman-legend-strip">
+            <span>
+              Blocks:
+              {' '}
+              <strong>brick</strong>
+              {' / '}
+              <strong>crate</strong>
+              {' / '}
+              <strong>barrel</strong>
+            </span>
+            <span>
+              Drops:
+              {' '}
+              <strong>bomb</strong>
+              , <strong>blast</strong>
+              , <strong>speed</strong>
+              , <strong>remote</strong>
+              , <strong>kick</strong>
+              , <strong>throw</strong>
+            </span>
+          </div>
+
           <div className="bomberman-stage-canvas">
             <div
               ref={stageHostRef}
@@ -186,30 +250,43 @@ export function BombermanGameClient(props: BombermanGameClientProps): React.JSX.
               Waiting for first server snapshot...
             </div>
           ) : null}
-        </div>
 
-        {connection.state.gameOver ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Round Complete</CardTitle>
-              <CardDescription>Server reported game over for this room.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              {connection.state.gameOver.results.map((result) => (
-                <div
-                  key={result.playerId}
-                  className="flex items-center justify-between rounded border border-border/70 bg-background/60 px-3 py-2"
-                >
-                  <span>{result.playerId}</span>
-                  <span>
-                    rank #{result.rank}
-                    {result.score !== undefined ? ` • score ${result.score}` : ''}
-                  </span>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        ) : null}
+          {connection.state.gameOver ? (
+            <div className="bomberman-gameover-overlay">
+              <Card className="w-full max-w-lg border-border/80 bg-card/95">
+                <CardHeader>
+                  <CardTitle>Game Over</CardTitle>
+                  <CardDescription>Round finished. Review results or run a quick rematch.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="space-y-2 text-sm">
+                    {connection.state.gameOver.results.map((result) => (
+                      <div
+                        key={result.playerId}
+                        className="flex items-center justify-between rounded border border-border/70 bg-background/60 px-3 py-2"
+                      >
+                        <span>{result.playerId}</span>
+                        <span>
+                          rank #{result.rank}
+                          {result.score !== undefined ? ` • score ${result.score}` : ''}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" onClick={retryRound}>
+                      Retry
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={backToLobby}>
+                      Back to Lobby
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <BombermanHud

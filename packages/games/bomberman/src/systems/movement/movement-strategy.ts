@@ -1,4 +1,13 @@
-import { MOVE_COOLDOWN_TICKS } from '../../constants.js';
+import {
+  BOMB_SLIDE_TICKS_PER_TILE,
+  MOVE_COOLDOWN_TICKS,
+} from '../../constants.js';
+import { pushBombermanEvent } from '../../events.js';
+import {
+  directionToDelta,
+  getBombEntitiesAt,
+  isTileOpenForBombMovement,
+} from '../../state/helpers.js';
 import type { GridPositionComponent, PlayerComponent } from '../../state/components.js';
 import type { BombermanSimulationState } from '../../state/setup-world.js';
 import type { BombermanDirection } from '../../types.js';
@@ -138,4 +147,58 @@ export function directionFromTiles(
   }
 
   return null;
+}
+
+export function tryKickBombInDirection(
+  state: BombermanSimulationState,
+  playerEntityId: number,
+  player: PlayerComponent,
+  bombTileX: number,
+  bombTileY: number,
+  direction: BombermanDirection,
+): boolean {
+  if (!player.canKickBombs) {
+    return false;
+  }
+
+  const bombRecords = getBombEntitiesAt(state, bombTileX, bombTileY);
+  const kickable = bombRecords.find((record) => record.movingDirection === null);
+  if (!kickable) {
+    return false;
+  }
+
+  const bomb = state.world.getComponent(kickable.entityId, 'bomb');
+  const bombPosition = state.world.getComponent(kickable.entityId, 'position');
+  if (!bomb || !bombPosition) {
+    return false;
+  }
+
+  const delta = directionToDelta(direction);
+  const nextBombX = bombPosition.x + delta.dx;
+  const nextBombY = bombPosition.y + delta.dy;
+
+  if (!isTileOpenForBombMovement(state, nextBombX, nextBombY, kickable.entityId)) {
+    return false;
+  }
+
+  bomb.movingDirection = direction;
+  bomb.moveCooldownTicks = BOMB_SLIDE_TICKS_PER_TILE;
+  bomb.ownerCanPass = false;
+
+  pushBombermanEvent(state, {
+    kind: 'bomb.kicked',
+    byPlayerId: player.playerId,
+    ownerPlayerId: bomb.ownerPlayerId,
+    from: {
+      x: bombPosition.x,
+      y: bombPosition.y,
+    },
+    to: {
+      x: nextBombX,
+      y: nextBombY,
+    },
+    direction,
+  });
+
+  return true;
 }

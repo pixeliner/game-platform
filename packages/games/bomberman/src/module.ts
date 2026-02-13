@@ -8,10 +8,12 @@ import { GAME_ID_BOMBERMAN } from './constants.js';
 import { getBombermanEventsSince } from './events.js';
 import { buildBombermanSnapshot } from './snapshot.js';
 import { createBombermanSimulationState } from './state/setup-world.js';
+import { runBombMotionSystem } from './systems/bomb-motion-system.js';
 import { runBombSystem } from './systems/bomb-system.js';
 import { runEliminationSystem } from './systems/elimination-system.js';
 import { runFlameSystem } from './systems/flame-system.js';
 import { runMovementSystem } from './systems/movement-system.js';
+import { runPowerupSystem } from './systems/powerup-system.js';
 import type {
   BombermanConfig,
   BombermanGameResults,
@@ -31,12 +33,12 @@ function validateBombermanInput(input: unknown): InputValidationResult<Bomberman
 
   const kind = (input as { kind: unknown }).kind;
 
-  if (kind === 'bomb.place') {
+  if (kind === 'bomb.place' || kind === 'bomb.remote_detonate' || kind === 'bomb.throw') {
     return {
       ok: true,
       value: {
-        kind: 'bomb.place',
-      },
+        kind,
+      } as BombermanInput,
     };
   }
 
@@ -144,10 +146,23 @@ export const bombermanModule: GameModule<
 
         if (input.kind === 'move.intent') {
           player.desiredDirection = input.direction;
+          if (input.direction !== null) {
+            player.lastFacingDirection = input.direction;
+          }
           return;
         }
 
-        player.queuedBombPlacement = true;
+        if (input.kind === 'bomb.place') {
+          player.queuedBombPlacement = true;
+          return;
+        }
+
+        if (input.kind === 'bomb.remote_detonate') {
+          player.queuedRemoteDetonation = true;
+          return;
+        }
+
+        player.queuedBombThrow = true;
       },
 
       tick(): void {
@@ -158,9 +173,11 @@ export const bombermanModule: GameModule<
         state.tick += 1;
 
         runMovementSystem(state);
+        runBombMotionSystem(state);
         runBombSystem(state);
         runFlameSystem(state);
         runEliminationSystem(state);
+        runPowerupSystem(state);
       },
 
       getSnapshot(): BombermanSnapshot {
