@@ -9,6 +9,10 @@ import type {
 
 import { ensureLocalProfile } from '@/src/lib/storage/local-profile';
 import {
+  consumeCreateLobbyAccessIntent,
+  consumeJoinLobbyAccessIntent,
+} from '@/src/lib/storage/lobby-access-intent-store';
+import {
   getLobbySessionRecord,
   setLobbySessionRecord,
 } from '@/src/lib/storage/session-token-store';
@@ -78,6 +82,8 @@ export function useLobbyConnection(options: UseLobbyConnectionOptions): UseLobby
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptRef = useRef(0);
   const knownLobbyIdRef = useRef(options.routeLobbyId === 'new' ? '' : options.routeLobbyId);
+  const createLobbyPasswordRef = useRef<string | null>(null);
+  const joinLobbyPasswordRef = useRef<string | null>(null);
 
   stateRef.current = state;
 
@@ -130,6 +136,7 @@ export function useLobbyConnection(options: UseLobbyConnectionOptions): UseLobby
           guestId: profile.guestId,
           nickname: profile.nickname,
           lobbyName: options.createLobbyName,
+          password: createLobbyPasswordRef.current ?? undefined,
         },
       });
       return;
@@ -137,6 +144,9 @@ export function useLobbyConnection(options: UseLobbyConnectionOptions): UseLobby
 
     const lobbyId = knownLobbyIdRef.current || options.routeLobbyId;
     const sessionRecord = getLobbySessionRecord(lobbyId);
+    const canUseSessionToken =
+      sessionRecord !== null &&
+      sessionRecord.guestId === profile.guestId;
 
     sendMessage({
       v: 1,
@@ -145,10 +155,8 @@ export function useLobbyConnection(options: UseLobbyConnectionOptions): UseLobby
         lobbyId,
         guestId: profile.guestId,
         nickname: profile.nickname,
-        sessionToken:
-          sessionRecord && sessionRecord.guestId === profile.guestId
-            ? sessionRecord.sessionToken
-            : undefined,
+        sessionToken: canUseSessionToken ? sessionRecord.sessionToken : undefined,
+        password: canUseSessionToken ? undefined : joinLobbyPasswordRef.current ?? undefined,
       },
     });
   }, [options.createLobbyName, options.nicknameHint, options.routeLobbyId, sendMessage]);
@@ -209,6 +217,14 @@ export function useLobbyConnection(options: UseLobbyConnectionOptions): UseLobby
   useEffect(() => {
     dispatch({ type: 'session.reset' });
     knownLobbyIdRef.current = options.routeLobbyId === 'new' ? '' : options.routeLobbyId;
+    createLobbyPasswordRef.current =
+      options.routeLobbyId === 'new'
+        ? consumeCreateLobbyAccessIntent()?.password ?? null
+        : null;
+    joinLobbyPasswordRef.current =
+      options.routeLobbyId !== 'new'
+        ? consumeJoinLobbyAccessIntent(options.routeLobbyId)?.password ?? null
+        : null;
     reconnectAttemptRef.current = 0;
     clearReconnectTimer();
 

@@ -176,6 +176,9 @@ export default function LobbyPage(): React.JSX.Element {
 
       <div className="flex flex-wrap gap-2">
         <Button asChild variant="outline" size="sm">
+          <Link href="/lobbies">Browse Lobbies</Link>
+        </Button>
+        <Button asChild variant="outline" size="sm">
           <Link href="/history">History</Link>
         </Button>
         <Button asChild variant="outline" size="sm">
@@ -206,9 +209,12 @@ export default function LobbyPage(): React.JSX.Element {
         <>
           <LobbyHeader
             lobbyId={lobbyState.lobbyId}
+            lobbyName={lobbyState.lobbyName}
             phase={lobbyState.phase}
             activeRoomId={lobbyState.activeRoomId}
             selectedGameId={lobbyState.selectedGameId}
+            requiresPassword={lobbyState.requiresPassword}
+            maxPlayers={lobbyState.maxPlayers}
             playerCount={lobbyState.players.length}
             connectedCount={lobbyState.players.filter((player) => player.isConnected).length}
             currentNickname={connection.currentNickname}

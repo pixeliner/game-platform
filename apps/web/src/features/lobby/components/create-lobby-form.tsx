@@ -4,6 +4,10 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { ensureLocalProfile, loadLocalProfile } from '@/src/lib/storage/local-profile';
+import {
+  clearCreateLobbyAccessIntent,
+  setCreateLobbyAccessIntent,
+} from '@/src/lib/storage/lobby-access-intent-store';
 import { Button } from '@/src/components/ui/button';
 import {
   Card,
@@ -21,6 +25,7 @@ export function CreateLobbyForm(): React.JSX.Element {
 
   const [nickname, setNickname] = useState(initialNickname);
   const [lobbyName, setLobbyName] = useState('LAN Session');
+  const [password, setPassword] = useState('');
 
   return (
     <Card>
@@ -34,6 +39,12 @@ export function CreateLobbyForm(): React.JSX.Element {
           onSubmit={(event) => {
             event.preventDefault();
             const profile = ensureLocalProfile(nickname);
+            const trimmedPassword = password.trim();
+            if (trimmedPassword.length >= 4) {
+              setCreateLobbyAccessIntent(trimmedPassword);
+            } else {
+              clearCreateLobbyAccessIntent();
+            }
             const params = new URLSearchParams({
               nickname: profile.nickname,
               lobbyName: lobbyName.trim() || 'LAN Session',
@@ -63,6 +74,20 @@ export function CreateLobbyForm(): React.JSX.Element {
               value={lobbyName}
               maxLength={64}
               onChange={(event) => setLobbyName(event.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground" htmlFor="create-lobby-password">
+              Password (optional)
+            </label>
+            <Input
+              id="create-lobby-password"
+              type="password"
+              value={password}
+              minLength={4}
+              maxLength={64}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Leave empty for open lobby"
             />
           </div>
           <CardFooter className="px-0 pt-2">

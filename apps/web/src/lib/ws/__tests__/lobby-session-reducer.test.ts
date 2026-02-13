@@ -32,10 +32,13 @@ describe('lobby-session-reducer', () => {
       type: 'lobby.state',
       payload: {
         lobbyId: 'lobby_1',
+        lobbyName: 'LAN Session',
         hostPlayerId: 'player_1',
         phase: 'waiting',
         activeRoomId: null,
         selectedGameId: 'bomberman',
+        requiresPassword: false,
+        maxPlayers: 4,
         players: [],
         votesByPlayerId: {},
       },

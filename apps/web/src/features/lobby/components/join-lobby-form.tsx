@@ -4,6 +4,10 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { ensureLocalProfile, loadLocalProfile } from '@/src/lib/storage/local-profile';
+import {
+  clearJoinLobbyAccessIntent,
+  setJoinLobbyAccessIntent,
+} from '@/src/lib/storage/lobby-access-intent-store';
 import { Button } from '@/src/components/ui/button';
 import {
   Card,
@@ -21,6 +25,7 @@ export function JoinLobbyForm(): React.JSX.Element {
 
   const [nickname, setNickname] = useState(initialNickname);
   const [lobbyId, setLobbyId] = useState('');
+  const [password, setPassword] = useState('');
 
   return (
     <Card>
@@ -39,6 +44,12 @@ export function JoinLobbyForm(): React.JSX.Element {
             }
 
             const profile = ensureLocalProfile(nickname);
+            const trimmedPassword = password.trim();
+            if (trimmedPassword.length >= 4) {
+              setJoinLobbyAccessIntent(trimmedLobbyId, trimmedPassword);
+            } else {
+              clearJoinLobbyAccessIntent(trimmedLobbyId);
+            }
             const params = new URLSearchParams({
               nickname: profile.nickname,
             });
@@ -69,6 +80,20 @@ export function JoinLobbyForm(): React.JSX.Element {
               maxLength={32}
               onChange={(event) => setNickname(event.target.value)}
               required
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground" htmlFor="join-password">
+              Password (if required)
+            </label>
+            <Input
+              id="join-password"
+              type="password"
+              value={password}
+              minLength={4}
+              maxLength={64}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Optional"
             />
           </div>
           <CardFooter className="px-0 pt-2">

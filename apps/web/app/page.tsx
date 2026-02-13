@@ -21,6 +21,9 @@ export default function HomePage(): React.JSX.Element {
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <Button asChild variant="outline" size="sm">
+            <Link href="/lobbies">Browse Lobbies</Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
             <Link href="/history">History</Link>
           </Button>
           <Button asChild variant="outline" size="sm">
