@@ -171,10 +171,11 @@ describe('RoomRuntimeManager', () => {
     const scheduler = new ManualScheduler();
     const timers = new FakeTimerController();
     const matchPersistenceService = new FakeMatchPersistenceService();
-    const roomGameOverCalls: Array<{
+    const roomStopCalls: Array<{
       lobbyId: string;
       roomId: string;
-      endedAtMs: number;
+      reason: string;
+      stoppedAtMs: number;
     }> = [];
 
     const manager = new RoomRuntimeManager({
@@ -189,8 +190,8 @@ describe('RoomRuntimeManager', () => {
       snapshotEveryTicks: 2,
       bombermanMovementModel: movementModel,
       roomIdleTimeoutMs: 30_000,
-      onRoomGameOver: (input) => {
-        roomGameOverCalls.push(input);
+      onRoomStopped: (input) => {
+        roomStopCalls.push(input);
       },
       createScheduler: () => scheduler,
       setTimer: timers.setTimer,
@@ -228,7 +229,7 @@ describe('RoomRuntimeManager', () => {
       scheduler,
       timers,
       matchPersistenceService,
-      roomGameOverCalls,
+      roomStopCalls,
       roomId: room.roomId,
     };
   }
@@ -381,6 +382,79 @@ describe('RoomRuntimeManager', () => {
     });
   });
 
+  it('allows spectator joins and streams snapshots/events as read-only subscribers', () => {
+    const harness = setupHarness();
+    harness.connectionRegistry.setContext({
+      connectionId: 'conn-player',
+      lobbyId: 'lobby-1',
+      playerId: 'player-1',
+      guestId: 'guest-1',
+      nickname: 'Host',
+    });
+    harness.connectionRegistry.setContext({
+      connectionId: 'conn-spectator',
+    });
+
+    harness.manager.handleGameMessage('conn-player', {
+      v: 1,
+      type: 'game.join',
+      payload: {
+        roomId: harness.roomId,
+        playerId: 'player-1',
+      },
+    });
+    harness.manager.handleGameMessage('conn-spectator', {
+      v: 1,
+      type: 'game.spectate.join',
+      payload: {
+        roomId: harness.roomId,
+        guestId: 'guest-s1',
+        nickname: 'Watcher',
+      },
+    });
+
+    const spectateJoined = harness.transport.findByType('conn-spectator', 'game.spectate.joined');
+    const initialSnapshot = harness.transport.findByType('conn-spectator', 'game.snapshot');
+
+    expect(spectateJoined?.payload.roomId).toBe(harness.roomId);
+    expect(spectateJoined?.payload.gameId).toBe('bomberman');
+    expect(initialSnapshot?.payload.tick).toBe(0);
+
+    harness.manager.handleGameMessage('conn-player', {
+      v: 1,
+      type: 'game.input',
+      payload: {
+        roomId: harness.roomId,
+        playerId: 'player-1',
+        tick: 1,
+        input: {
+          kind: 'move.intent',
+          direction: 'right',
+        },
+      },
+    });
+    harness.scheduler.advance(1);
+
+    const spectatorEvent = harness.transport.findByType('conn-spectator', 'game.event');
+    expect(spectatorEvent).toBeDefined();
+
+    expect(() =>
+      harness.manager.handleGameMessage('conn-spectator', {
+        v: 1,
+        type: 'game.input',
+        payload: {
+          roomId: harness.roomId,
+          playerId: 'player-1',
+          tick: 2,
+          input: {
+            kind: 'move.intent',
+            direction: 'left',
+          },
+        },
+      }),
+    ).toThrow(LobbyServiceError);
+  });
+
   it('persists game-over results when runtime ends a round', () => {
     const harness = setupHarness();
     harness.connectionRegistry.setContext({
@@ -475,16 +549,17 @@ describe('RoomRuntimeManager', () => {
     expect(harness.matchPersistenceService.calls[0]?.matchId).toBe('match-1');
     expect(harness.matchPersistenceService.calls[0]?.endReason).toBe('game_over');
     expect(Array.isArray(harness.matchPersistenceService.calls[0]?.results)).toBe(true);
-    expect(harness.roomGameOverCalls).toEqual([
+    expect(harness.roomStopCalls).toEqual([
       {
         lobbyId: 'lobby-1',
         roomId: harness.roomId,
-        endedAtMs: 1_700_000_000_000,
+        reason: 'game_over',
+        stoppedAtMs: 1_700_000_000_000,
       },
     ]);
   });
 
-  it('pauses when room has zero connected players and stops after idle timeout', () => {
+  it('pauses when room has zero connected players even if spectators remain and stops after idle timeout', () => {
     const harness = setupHarness();
     const initialContext: GatewayConnectionContext = {
       connectionId: 'conn-1',
@@ -493,15 +568,31 @@ describe('RoomRuntimeManager', () => {
       guestId: 'guest-1',
       nickname: 'Host',
       gameRoomId: harness.roomId,
+      gameSessionRole: 'player',
+    };
+    const spectatorContext: GatewayConnectionContext = {
+      connectionId: 'conn-s1',
+      gameRoomId: harness.roomId,
+      gameSessionRole: 'spectator',
     };
 
     harness.connectionRegistry.setContext(initialContext);
+    harness.connectionRegistry.setContext(spectatorContext);
     harness.manager.handleGameMessage('conn-1', {
       v: 1,
       type: 'game.join',
       payload: {
         roomId: harness.roomId,
         playerId: 'player-1',
+      },
+    });
+    harness.manager.handleGameMessage('conn-s1', {
+      v: 1,
+      type: 'game.spectate.join',
+      payload: {
+        roomId: harness.roomId,
+        guestId: 'guest-s1',
+        nickname: 'Watcher',
       },
     });
 
@@ -537,5 +628,13 @@ describe('RoomRuntimeManager', () => {
   function timersFireAndAssertStop(harness: ReturnType<typeof setupHarness>): void {
     harness.timers.fireAll();
     expect(harness.roomManager.getRoom(harness.roomId)?.status).toBe('stopped');
+    expect(harness.roomStopCalls).toEqual([
+      {
+        lobbyId: 'lobby-1',
+        roomId: harness.roomId,
+        reason: 'idle_timeout',
+        stoppedAtMs: 1_700_000_000_000,
+      },
+    ]);
   }
 });

@@ -202,6 +202,21 @@ describe('SqliteMatchRepository', () => {
     expect(page.page.total).toBe(3);
   });
 
+  it('returns a full match by room id or null when missing', () => {
+    const repository = createRepository();
+    seedMatches(repository);
+
+    const match = repository.getMatchByRoomId('room-2');
+    expect(match?.matchId).toBe('match-2');
+    expect(match?.players.map((player) => `${player.rank}:${player.guestId}`)).toEqual([
+      '1:guest-c',
+      '2:guest-a',
+    ]);
+
+    const missing = repository.getMatchByRoomId('room-does-not-exist');
+    expect(missing).toBeNull();
+  });
+
   it('computes aggregate stats for a guest with deterministic recent history', () => {
     const repository = createRepository();
     seedMatches(repository);

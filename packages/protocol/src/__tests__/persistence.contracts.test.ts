@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   historyQuerySchema,
+  matchByRoomPathParamsSchema,
+  matchByRoomResponseSchema,
   leaderboardResponseSchema,
   matchHistoryResponseSchema,
   playerStatsResponseSchema,
@@ -62,6 +64,42 @@ describe('persistence contracts', () => {
     expect(result.success).toBe(true);
   });
 
+  it('parses valid match-by-room path and response payload', () => {
+    const path = matchByRoomPathParamsSchema.safeParse({
+      roomId: 'room-1',
+    });
+    expect(path.success).toBe(true);
+
+    const response = matchByRoomResponseSchema.safeParse({
+      item: {
+        matchId: 'match-1',
+        roomId: 'room-1',
+        lobbyId: 'lobby-1',
+        gameId: 'bomberman',
+        seed: 10,
+        tickRate: 20,
+        startedAtMs: 1000,
+        endedAtMs: 2000,
+        endReason: 'game_over',
+        winnerPlayerId: 'player-1',
+        winnerGuestId: 'guest-1',
+        players: [
+          {
+            playerId: 'player-1',
+            guestId: 'guest-1',
+            nickname: 'Alpha',
+            rank: 1,
+            score: 5,
+            alive: true,
+            eliminatedAtTick: null,
+          },
+        ],
+      },
+    });
+
+    expect(response.success).toBe(true);
+  });
+
   it('rejects invalid leaderboard response values', () => {
     const result = leaderboardResponseSchema.safeParse({
       items: [
@@ -85,6 +123,41 @@ describe('persistence contracts', () => {
     });
 
     expect(result.success).toBe(false);
+  });
+
+  it('rejects malformed match-by-room values', () => {
+    const invalidPath = matchByRoomPathParamsSchema.safeParse({
+      roomId: '',
+    });
+    expect(invalidPath.success).toBe(false);
+
+    const invalidResponse = matchByRoomResponseSchema.safeParse({
+      item: {
+        matchId: 'match-1',
+        roomId: 'room-1',
+        lobbyId: 'lobby-1',
+        gameId: 'bomberman',
+        seed: 10,
+        tickRate: 20,
+        startedAtMs: 1000,
+        endedAtMs: 2000,
+        endReason: 'game_over',
+        winnerPlayerId: 'player-1',
+        winnerGuestId: 'guest-1',
+        players: [
+          {
+            playerId: 'player-1',
+            guestId: 'guest-1',
+            nickname: 'Alpha',
+            rank: 0,
+            score: 5,
+            alive: true,
+            eliminatedAtTick: null,
+          },
+        ],
+      },
+    });
+    expect(invalidResponse.success).toBe(false);
   });
 
   it('rejects invalid stats response rank shape', () => {

@@ -33,7 +33,26 @@ describe('game-session-reducer', () => {
 
     expect(withJoin.auth?.playerId).toBe('player-1');
     expect(withJoin.joinAccepted?.tick).toBe(8);
+    expect(withJoin.sessionRole).toBe('player');
     expect(withJoin.connectionStatus).toBe('connected');
+  });
+
+  it('stores spectator join state and role', () => {
+    const initial = createInitialGameSessionState('room-1', 'lobby-1');
+    const withSpectateJoin = gameSessionReducer(initial, {
+      type: 'game.spectate.joined',
+      payload: {
+        roomId: 'room-1',
+        gameId: 'bomberman',
+        spectatorId: 'spectator-1',
+        tick: 3,
+        joinedAtMs: 4_000,
+      },
+    });
+
+    expect(withSpectateJoin.sessionRole).toBe('spectator');
+    expect(withSpectateJoin.spectateJoined?.spectatorId).toBe('spectator-1');
+    expect(withSpectateJoin.connectionStatus).toBe('connected');
   });
 
   it('ignores stale snapshots and accepts newer ticks', () => {

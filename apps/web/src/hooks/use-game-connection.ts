@@ -14,12 +14,23 @@ import type {
 } from '@game-platform/game-bomberman';
 
 import { resolveGatewayWebSocketUrl } from '@/src/lib/env';
-import { loadLocalProfile } from '@/src/lib/storage/local-profile';
+import { ensureLocalProfile } from '@/src/lib/storage/local-profile';
+import {
+  getActiveGameSessionRecord,
+  setActiveGameSessionRecord,
+} from '@/src/lib/storage/active-game-session-store';
 import {
   getLobbySessionRecord,
   setLobbySessionRecord,
 } from '@/src/lib/storage/session-token-store';
 import { GatewayProtocolClient } from '@/src/lib/ws/gateway-protocol-client';
+import {
+  buildSpectateJoinMessage,
+  isTerminalGameLobbyErrorCode,
+  normalizeGameRouteMode,
+  resolvePlayerLobbyId,
+  type GameRouteMode,
+} from '@/src/lib/ws/game-connection-flow';
 import {
   createInitialGameSessionState,
   gameSessionReducer,
@@ -31,12 +42,15 @@ import { getReconnectDecision } from '@/src/lib/ws/reconnect-policy';
 export interface UseGameConnectionOptions {
   roomId: string;
   lobbyId: string | null;
+  mode?: GameRouteMode;
 }
 
 export interface UseGameConnectionResult {
   state: GameSessionState;
   gatewayUrl: string;
   gatewayUrlSource: 'env' | 'fallback';
+  resolvedLobbyId: string | null;
+  sessionRole: 'player' | 'spectator' | null;
   canSendInput: boolean;
   playerId: string | null;
   sendMoveIntent: (direction: BombermanDirection | null) => void;
@@ -48,8 +62,8 @@ export interface UseGameConnectionResult {
   clearError: () => void;
 }
 
-const TERMINAL_ERROR_CODES = new Set(['invalid_session_token', 'unauthorized', 'invalid_state']);
 const BOMBERMAN_GAME_ID = 'bomberman';
+const ACTIVE_GAME_SESSION_TTL_MS = 6 * 60 * 60 * 1000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -288,10 +302,23 @@ function createClientError(code: string, message: string, details?: unknown): Ga
 
 export function useGameConnection(options: UseGameConnectionOptions): UseGameConnectionResult {
   const resolvedGateway = useMemo(() => resolveGatewayWebSocketUrl(), []);
+  const requestedMode = normalizeGameRouteMode(options.mode);
+  const resolvedPlayerLobbyId = useMemo(
+    () =>
+      requestedMode === 'player'
+        ? resolvePlayerLobbyId({
+            requestedLobbyId: options.lobbyId,
+            roomId: options.roomId,
+            readActiveGameSession: (roomId) => getActiveGameSessionRecord(roomId),
+          })
+        : null,
+    [options.lobbyId, options.roomId, requestedMode],
+  );
+  const resolvedLobbyId = requestedMode === 'player' ? resolvedPlayerLobbyId : options.lobbyId;
 
   const [state, dispatch] = useReducer(
     gameSessionReducer,
-    createInitialGameSessionState(options.roomId, options.lobbyId ?? ''),
+    createInitialGameSessionState(options.roomId, resolvedLobbyId ?? ''),
   );
 
   const stateRef = useRef(state);
@@ -337,7 +364,11 @@ export function useGameConnection(options: UseGameConnectionOptions): UseGameCon
   }, []);
 
   const sendLobbyJoin = useCallback(() => {
-    if (!options.lobbyId) {
+    if (requestedMode !== 'player') {
+      return;
+    }
+
+    if (!resolvedPlayerLobbyId) {
       terminalErrorRef.current = true;
       dispatch({
         type: 'connection.status',
@@ -350,13 +381,13 @@ export function useGameConnection(options: UseGameConnectionOptions): UseGameCon
         type: 'error.set',
         payload: createClientError(
           'missing_lobby_id',
-          'No lobbyId was supplied to the game route. Return to the lobby and re-open the game.',
+          'No lobbyId was supplied and no active game context was found for this room.',
         ),
       });
       return;
     }
 
-    const session = getLobbySessionRecord(options.lobbyId);
+    const session = getLobbySessionRecord(resolvedPlayerLobbyId);
     if (!session) {
       terminalErrorRef.current = true;
       dispatch({
@@ -376,8 +407,8 @@ export function useGameConnection(options: UseGameConnectionOptions): UseGameCon
       return;
     }
 
-    const profile = loadLocalProfile();
-    const nickname = profile?.nickname ?? 'LanPlayer';
+    const profile = ensureLocalProfile();
+    const nickname = profile.nickname;
 
     dispatch({
       type: 'connection.status',
@@ -391,20 +422,20 @@ export function useGameConnection(options: UseGameConnectionOptions): UseGameCon
       v: PROTOCOL_VERSION,
       type: 'lobby.join',
       payload: {
-        lobbyId: options.lobbyId,
+        lobbyId: resolvedPlayerLobbyId,
         guestId: session.guestId,
         nickname,
         sessionToken: session.sessionToken,
       },
     });
-  }, [options.lobbyId, sendMessage]);
+  }, [requestedMode, resolvedPlayerLobbyId, sendMessage]);
 
   useEffect(() => {
     dispatch({
       type: 'session.reset',
       payload: {
         roomId: options.roomId,
-        lobbyId: options.lobbyId ?? '',
+        lobbyId: resolvedLobbyId ?? '',
       },
     });
 
@@ -414,41 +445,44 @@ export function useGameConnection(options: UseGameConnectionOptions): UseGameCon
     lastObservedServerTickRef.current = 0;
     lastSentInputTickRef.current = 0;
 
-    if (!options.lobbyId) {
-      dispatch({
-        type: 'connection.status',
-        payload: {
-          status: 'error',
-          reconnectAttempt: reconnectAttemptRef.current,
-        },
-      });
-      dispatch({
-        type: 'error.set',
-        payload: createClientError(
-          'missing_lobby_id',
-          'No lobbyId was supplied to the game route. Return to the lobby and re-open the game.',
-        ),
-      });
-      return;
-    }
+    if (requestedMode === 'player') {
+      if (!resolvedPlayerLobbyId) {
+        terminalErrorRef.current = true;
+        dispatch({
+          type: 'connection.status',
+          payload: {
+            status: 'error',
+            reconnectAttempt: reconnectAttemptRef.current,
+          },
+        });
+        dispatch({
+          type: 'error.set',
+          payload: createClientError(
+            'missing_lobby_id',
+            'No lobbyId was supplied and no active game context was found for this room.',
+          ),
+        });
+        return;
+      }
 
-    if (!getLobbySessionRecord(options.lobbyId)) {
-      terminalErrorRef.current = true;
-      dispatch({
-        type: 'connection.status',
-        payload: {
-          status: 'error',
-          reconnectAttempt: reconnectAttemptRef.current,
-        },
-      });
-      dispatch({
-        type: 'error.set',
-        payload: createClientError(
-          'missing_session',
-          'No valid lobby session token was found. Return to lobby and rejoin.',
-        ),
-      });
-      return;
+      if (!getLobbySessionRecord(resolvedPlayerLobbyId)) {
+        terminalErrorRef.current = true;
+        dispatch({
+          type: 'connection.status',
+          payload: {
+            status: 'error',
+            reconnectAttempt: reconnectAttemptRef.current,
+          },
+        });
+        dispatch({
+          type: 'error.set',
+          payload: createClientError(
+            'missing_session',
+            'No valid lobby session token was found. Return to lobby and rejoin.',
+          ),
+        });
+        return;
+      }
     }
 
     const client = new GatewayProtocolClient(resolvedGateway.value, {
@@ -466,6 +500,23 @@ export function useGameConnection(options: UseGameConnectionOptions): UseGameCon
 
         if (status === 'connected') {
           reconnectAttemptRef.current = 0;
+          if (requestedMode === 'spectator') {
+            const profile = ensureLocalProfile();
+            dispatch({
+              type: 'connection.status',
+              payload: {
+                status: 'joining_game',
+                reconnectAttempt: reconnectAttemptRef.current,
+              },
+            });
+            sendMessage(buildSpectateJoinMessage({
+              roomId: options.roomId,
+              guestId: profile.guestId,
+              nickname: profile.nickname,
+            }));
+            return;
+          }
+
           sendLobbyJoin();
           return;
         }
@@ -484,7 +535,11 @@ export function useGameConnection(options: UseGameConnectionOptions): UseGameCon
       onMessage: (message): void => {
         switch (message.type) {
           case 'lobby.auth.issued': {
-            if (message.payload.lobbyId !== options.lobbyId) {
+            if (requestedMode !== 'player') {
+              return;
+            }
+
+            if (message.payload.lobbyId !== resolvedPlayerLobbyId) {
               dispatch({
                 type: 'error.set',
                 payload: createClientError(
@@ -544,8 +599,48 @@ export function useGameConnection(options: UseGameConnectionOptions): UseGameCon
               message.payload.tick,
             );
 
+            if (resolvedPlayerLobbyId) {
+              setActiveGameSessionRecord({
+                roomId: options.roomId,
+                lobbyId: resolvedPlayerLobbyId,
+                mode: 'player',
+                expiresAtMs: Date.now() + ACTIVE_GAME_SESSION_TTL_MS,
+              });
+            }
+
             dispatch({
               type: 'game.join.accepted',
+              payload: message.payload,
+            });
+            return;
+          }
+
+          case 'game.spectate.joined': {
+            if (
+              message.payload.roomId !== options.roomId ||
+              message.payload.gameId !== BOMBERMAN_GAME_ID
+            ) {
+              return;
+            }
+
+            lastObservedServerTickRef.current = Math.max(
+              lastObservedServerTickRef.current,
+              message.payload.tick,
+            );
+            lastSentInputTickRef.current = Math.max(
+              lastSentInputTickRef.current,
+              message.payload.tick,
+            );
+
+            setActiveGameSessionRecord({
+              roomId: options.roomId,
+              lobbyId: resolvedLobbyId ?? '',
+              mode: 'spectator',
+              expiresAtMs: Date.now() + ACTIVE_GAME_SESSION_TTL_MS,
+            });
+
+            dispatch({
+              type: 'game.spectate.joined',
               payload: message.payload,
             });
             return;
@@ -626,7 +721,7 @@ export function useGameConnection(options: UseGameConnectionOptions): UseGameCon
               payload: message.payload,
             });
 
-            if (TERMINAL_ERROR_CODES.has(message.payload.code)) {
+            if (isTerminalGameLobbyErrorCode(message.payload.code)) {
               terminalErrorRef.current = true;
               dispatch({
                 type: 'connection.status',
@@ -718,7 +813,16 @@ export function useGameConnection(options: UseGameConnectionOptions): UseGameCon
       client.disconnect('game_route_unmount');
       clientRef.current = null;
     };
-  }, [clearReconnectTimer, options.lobbyId, options.roomId, resolvedGateway.value, sendLobbyJoin, sendMessage]);
+  }, [
+    clearReconnectTimer,
+    options.roomId,
+    requestedMode,
+    resolvedGateway.value,
+    resolvedLobbyId,
+    resolvedPlayerLobbyId,
+    sendLobbyJoin,
+    sendMessage,
+  ]);
 
   const sendInput = useCallback((input: unknown) => {
     const auth = stateRef.current.auth;
@@ -811,8 +915,11 @@ export function useGameConnection(options: UseGameConnectionOptions): UseGameCon
     state,
     gatewayUrl: resolvedGateway.value,
     gatewayUrlSource: resolvedGateway.source,
+    resolvedLobbyId,
+    sessionRole: state.sessionRole,
     canSendInput:
       state.connectionStatus === 'connected' &&
+      state.sessionRole === 'player' &&
       state.auth !== null &&
       state.joinAccepted !== null,
     playerId: state.auth?.playerId ?? null,

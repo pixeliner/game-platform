@@ -290,7 +290,7 @@ export class LobbyService {
     });
 
     this.roomRuntimeManager.startRoomRuntime(room);
-    this.stateMachine.setInGame(lobby.lobbyId, nowMs);
+    this.stateMachine.setInGame(lobby.lobbyId, room.roomId, nowMs);
 
     const startAccepted: LobbyServerMessage = {
       v: PROTOCOL_VERSION,
@@ -322,9 +322,13 @@ export class LobbyService {
     this.scheduleEviction(context.lobbyId, context.playerId);
   }
 
-  public handleRoomGameOver(lobbyId: string): void {
+  public handleRoomStopped(lobbyId: string, reason: string): void {
     const lobby = this.stateMachine.getLobby(lobbyId);
     if (!lobby) {
+      return;
+    }
+
+    if (reason !== 'game_over' && reason !== 'idle_timeout') {
       return;
     }
 

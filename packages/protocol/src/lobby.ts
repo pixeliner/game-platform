@@ -32,6 +32,7 @@ const lobbyStatePayloadSchema = z.object({
   lobbyId: lobbyIdSchema,
   hostPlayerId: idSchema,
   phase: z.enum(['waiting', 'starting', 'in_game', 'closed']),
+  activeRoomId: roomIdSchema.nullable(),
   selectedGameId: gameIdSchema.nullable(),
   players: z.array(lobbyPlayerSchema),
   votesByPlayerId: z.record(idSchema, gameIdSchema),

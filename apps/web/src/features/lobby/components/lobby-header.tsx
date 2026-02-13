@@ -11,6 +11,7 @@ import { findGameCatalogEntry } from '@/src/lib/game-catalog';
 export interface LobbyHeaderProps {
   lobbyId: string;
   phase: string;
+  activeRoomId: string | null;
   selectedGameId: string | null;
   playerCount: number;
   connectedCount: number;
@@ -39,6 +40,12 @@ export function LobbyHeader(props: LobbyHeaderProps): React.JSX.Element {
       <CardContent className="flex flex-wrap items-center gap-2 text-sm">
         <span className="text-muted-foreground">Selected game</span>
         <Badge variant="secondary">{selectedGameLabel}</Badge>
+        {props.phase === 'in_game' && props.activeRoomId ? (
+          <>
+            <span className="text-muted-foreground">Active room</span>
+            <Badge variant="outline">{props.activeRoomId}</Badge>
+          </>
+        ) : null}
       </CardContent>
     </Card>
   );

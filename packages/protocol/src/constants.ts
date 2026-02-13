@@ -18,6 +18,8 @@ export const LOBBY_MESSAGE_TYPES = [
 export const GAME_MESSAGE_TYPES = [
   'game.join',
   'game.join.accepted',
+  'game.spectate.join',
+  'game.spectate.joined',
   'game.leave',
   'game.input',
   'game.snapshot',

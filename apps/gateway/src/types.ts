@@ -14,6 +14,10 @@ export interface GatewayConnectionContext {
   guestId?: string;
   nickname?: string;
   gameRoomId?: string | undefined;
+  gameSessionRole?: 'player' | 'spectator' | undefined;
+  spectatorId?: string | undefined;
+  spectatorGuestId?: string | undefined;
+  spectatorNickname?: string | undefined;
 }
 
 export interface ConnectionRegistry {

@@ -15,8 +15,9 @@ import type { GameConnectionStatus, GameSessionState } from '@/src/lib/ws/game-s
 export interface BombermanHudProps {
   state: GameSessionState;
   roomId: string;
-  lobbyId: string;
+  lobbyId: string | null;
   playerId: string | null;
+  requestedMode: 'player' | 'spectator';
   gatewayUrl: string;
   gatewayUrlSource: 'env' | 'fallback';
   onReconnectNow: () => void;
@@ -73,6 +74,7 @@ function formatEvent(event: BombermanEvent): string {
 }
 
 export function BombermanHud(props: BombermanHudProps): React.JSX.Element {
+  const effectiveRole = props.state.sessionRole ?? props.requestedMode;
   const players = props.state.latestSnapshot?.players ?? [];
   const currentPlayer = players.find((player) => player.playerId === props.playerId);
   const recentEvents = props.state.recentEvents.slice(-8).reverse();
@@ -104,10 +106,13 @@ export function BombermanHud(props: BombermanHudProps): React.JSX.Element {
               Room: <code>{props.roomId}</code>
             </div>
             <div>
-              Lobby: <code>{props.lobbyId}</code>
+              Lobby: <code>{props.lobbyId ?? 'n/a'}</code>
             </div>
             <div>
               Player: <code>{props.playerId ?? 'unknown'}</code>
+            </div>
+            <div>
+              Role: <code>{effectiveRole}</code>
             </div>
           </div>
 
@@ -178,43 +183,45 @@ export function BombermanHud(props: BombermanHudProps): React.JSX.Element {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Your Loadout</CardTitle>
-          <CardDescription>Current progression from collected powerups.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          {!currentPlayer ? (
-            <p className="text-muted-foreground">Waiting for player snapshot...</p>
-          ) : (
-            <>
-              <div className="flex items-center justify-between rounded border border-border/70 bg-background/50 px-3 py-2">
-                <span>Bomb Limit</span>
-                <span>{currentPlayer.bombLimit}</span>
-              </div>
-              <div className="flex items-center justify-between rounded border border-border/70 bg-background/50 px-3 py-2">
-                <span>Blast Radius</span>
-                <span>{currentPlayer.blastRadius}</span>
-              </div>
-              <div className="flex items-center justify-between rounded border border-border/70 bg-background/50 px-3 py-2">
-                <span>Speed Tier</span>
-                <span>{currentPlayer.speedTier}</span>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Badge variant={currentPlayer.hasRemoteDetonator ? 'success' : 'outline'}>
-                  Remote
-                </Badge>
-                <Badge variant={currentPlayer.canKickBombs ? 'success' : 'outline'}>
-                  Kick
-                </Badge>
-                <Badge variant={currentPlayer.canThrowBombs ? 'success' : 'outline'}>
-                  Throw
-                </Badge>
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
+      {effectiveRole === 'player' ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Your Loadout</CardTitle>
+            <CardDescription>Current progression from collected powerups.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {!currentPlayer ? (
+              <p className="text-muted-foreground">Waiting for player snapshot...</p>
+            ) : (
+              <>
+                <div className="flex items-center justify-between rounded border border-border/70 bg-background/50 px-3 py-2">
+                  <span>Bomb Limit</span>
+                  <span>{currentPlayer.bombLimit}</span>
+                </div>
+                <div className="flex items-center justify-between rounded border border-border/70 bg-background/50 px-3 py-2">
+                  <span>Blast Radius</span>
+                  <span>{currentPlayer.blastRadius}</span>
+                </div>
+                <div className="flex items-center justify-between rounded border border-border/70 bg-background/50 px-3 py-2">
+                  <span>Speed Tier</span>
+                  <span>{currentPlayer.speedTier}</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant={currentPlayer.hasRemoteDetonator ? 'success' : 'outline'}>
+                    Remote
+                  </Badge>
+                  <Badge variant={currentPlayer.canKickBombs ? 'success' : 'outline'}>
+                    Kick
+                  </Badge>
+                  <Badge variant={currentPlayer.canThrowBombs ? 'success' : 'outline'}>
+                    Throw
+                  </Badge>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>

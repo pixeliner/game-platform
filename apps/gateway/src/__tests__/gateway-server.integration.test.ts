@@ -5,6 +5,7 @@ import {
   type GameJoinAcceptedMessage,
   type GameOverMessage,
   type GameSnapshotMessage,
+  type GameSpectateJoinedMessage,
   type LobbyAuthIssuedMessage,
   type LobbyErrorMessage,
   type LobbyStartAcceptedMessage,
@@ -137,6 +138,10 @@ function isGameJoinAccepted(message: ProtocolMessage): message is GameJoinAccept
   return message.type === 'game.join.accepted';
 }
 
+function isGameSpectateJoined(message: ProtocolMessage): message is GameSpectateJoinedMessage {
+  return message.type === 'game.spectate.joined';
+}
+
 function isGameSnapshot(message: ProtocolMessage): message is GameSnapshotMessage {
   return message.type === 'game.snapshot';
 }
@@ -243,10 +248,11 @@ async function startBombermanRoom(setup: LobbySetup): Promise<LobbyStartAccepted
   });
 
   const startAccepted = await waitForMessage(setup.host, isStartAccepted);
-  await waitForMessage(
+  const inGameState = await waitForMessage(
     setup.host,
     (message): message is LobbyStateMessage => isLobbyState(message) && message.payload.phase === 'in_game',
   );
+  expect(inGameState.payload.activeRoomId).toBe(startAccepted.payload.roomId);
   return startAccepted;
 }
 
@@ -512,6 +518,175 @@ describe('gateway websocket integration', () => {
     expect(periodicSnapshot.payload.tick % 2).toBe(0);
   });
 
+  it('supports late spectator joins with snapshot/event/game-over streaming', async () => {
+    const setup = await setupTwoPlayerLobby(url);
+    clients.push(setup.host.socket, setup.guest.socket);
+    const startAccepted = await startBombermanRoom(setup);
+
+    send(setup.host, {
+      v: 1,
+      type: 'game.join',
+      payload: {
+        roomId: startAccepted.payload.roomId,
+        playerId: setup.hostPlayerId,
+      },
+    });
+    await waitForMessage(setup.host, isGameJoinAccepted);
+    await waitForMessage(setup.host, isGameSnapshot);
+
+    send(setup.guest, {
+      v: 1,
+      type: 'game.join',
+      payload: {
+        roomId: startAccepted.payload.roomId,
+        playerId: setup.guestPlayerId,
+      },
+    });
+    await waitForMessage(setup.guest, isGameJoinAccepted);
+    await waitForMessage(setup.guest, isGameSnapshot);
+
+    const spectator = await connectClient(url);
+    clients.push(spectator.socket);
+    send(spectator, {
+      v: 1,
+      type: 'game.spectate.join',
+      payload: {
+        roomId: startAccepted.payload.roomId,
+        guestId: 'guest-s1',
+        nickname: 'Watcher',
+      },
+    });
+
+    const spectatorJoined = await waitForMessage(spectator, isGameSpectateJoined);
+    expect(spectatorJoined.payload.roomId).toBe(startAccepted.payload.roomId);
+    const spectatorSnapshot = await waitForMessage(spectator, isGameSnapshot);
+    expect(spectatorSnapshot.payload.roomId).toBe(startAccepted.payload.roomId);
+
+    send(setup.host, {
+      v: 1,
+      type: 'game.input',
+      payload: {
+        roomId: startAccepted.payload.roomId,
+        playerId: setup.hostPlayerId,
+        tick: 1,
+        input: {
+          kind: 'move.intent',
+          direction: 'right',
+        },
+      },
+    });
+    await waitForMessage(
+      spectator,
+      (message): message is GameEventMessage =>
+        isGameEvent(message) &&
+        message.payload.roomId === startAccepted.payload.roomId &&
+        (message.payload.event as { kind?: unknown }).kind === 'player.moved',
+    );
+
+    send(setup.guest, {
+      v: 1,
+      type: 'game.input',
+      payload: {
+        roomId: startAccepted.payload.roomId,
+        playerId: setup.guestPlayerId,
+        tick: 2,
+        input: {
+          kind: 'move.intent',
+          direction: 'left',
+        },
+      },
+    });
+    send(setup.host, {
+      v: 1,
+      type: 'game.input',
+      payload: {
+        roomId: startAccepted.payload.roomId,
+        playerId: setup.hostPlayerId,
+        tick: 3,
+        input: {
+          kind: 'bomb.place',
+        },
+      },
+    });
+    send(setup.host, {
+      v: 1,
+      type: 'game.input',
+      payload: {
+        roomId: startAccepted.payload.roomId,
+        playerId: setup.hostPlayerId,
+        tick: 4,
+        input: {
+          kind: 'move.intent',
+          direction: 'right',
+        },
+      },
+    });
+    send(setup.host, {
+      v: 1,
+      type: 'game.input',
+      payload: {
+        roomId: startAccepted.payload.roomId,
+        playerId: setup.hostPlayerId,
+        tick: 5,
+        input: {
+          kind: 'move.intent',
+          direction: null,
+        },
+      },
+    });
+
+    const spectatorGameOver = await waitForMessage(spectator, isGameOver, 8_000);
+    expect(spectatorGameOver.payload.roomId).toBe(startAccepted.payload.roomId);
+  });
+
+  it('allows active-game player reconnect and rejoin with lobby token flow', async () => {
+    const setup = await setupTwoPlayerLobby(url);
+    clients.push(setup.host.socket, setup.guest.socket);
+    const startAccepted = await startBombermanRoom(setup);
+
+    send(setup.host, {
+      v: 1,
+      type: 'game.join',
+      payload: {
+        roomId: startAccepted.payload.roomId,
+        playerId: setup.hostPlayerId,
+      },
+    });
+    await waitForMessage(setup.host, isGameJoinAccepted);
+    await waitForMessage(setup.host, isGameSnapshot);
+
+    await closeClient(setup.host);
+
+    const reconnectedHost = await connectClient(url);
+    clients.push(reconnectedHost.socket);
+    send(reconnectedHost, {
+      v: 1,
+      type: 'lobby.join',
+      payload: {
+        lobbyId: setup.lobbyId,
+        guestId: 'guest-host',
+        nickname: 'Host',
+        sessionToken: setup.hostToken,
+      },
+    });
+
+    const reconnectAuth = await waitForMessage(reconnectedHost, isAuthIssued);
+    expect(reconnectAuth.payload.playerId).toBe(setup.hostPlayerId);
+
+    send(reconnectedHost, {
+      v: 1,
+      type: 'game.join',
+      payload: {
+        roomId: startAccepted.payload.roomId,
+        playerId: setup.hostPlayerId,
+      },
+    });
+    const rejoinAccepted = await waitForMessage(reconnectedHost, isGameJoinAccepted);
+    expect(rejoinAccepted.payload.playerId).toBe(setup.hostPlayerId);
+    const rejoinSnapshot = await waitForMessage(reconnectedHost, isGameSnapshot);
+    expect(rejoinSnapshot.payload.roomId).toBe(startAccepted.payload.roomId);
+  });
+
   it('returns lobby to waiting after game over and supports rematch start', async () => {
     const setup = await setupTwoPlayerLobby(url);
     clients.push(setup.host.socket, setup.guest.socket);
@@ -685,6 +860,14 @@ describe('gateway websocket integration', () => {
       },
     });
     await waitForMessage(reconnectedHost, isAuthIssued);
+    const waitingState = await waitForMessage(
+      reconnectedHost,
+      (message): message is LobbyStateMessage =>
+        isLobbyState(message) &&
+        message.payload.lobbyId === setup.lobbyId &&
+        message.payload.phase === 'waiting',
+    );
+    expect(waitingState.payload.activeRoomId).toBeNull();
 
     send(reconnectedHost, {
       v: 1,

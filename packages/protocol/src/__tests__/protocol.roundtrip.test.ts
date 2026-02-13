@@ -75,6 +75,7 @@ const validMessages: ProtocolMessage[] = [
       lobbyId: 'lobby-1',
       hostPlayerId: 'player-1',
       phase: 'waiting',
+      activeRoomId: null,
       selectedGameId: 'bomberman',
       players: [
         {
@@ -159,6 +160,26 @@ const validMessages: ProtocolMessage[] = [
       roomId: 'room-1',
       gameId: 'bomberman',
       playerId: 'player-1',
+      tick: 0,
+      joinedAtMs: 1700000000000,
+    },
+  },
+  {
+    v: PROTOCOL_VERSION,
+    type: 'game.spectate.join',
+    payload: {
+      roomId: 'room-1',
+      guestId: 'guest-s1',
+      nickname: 'Watcher',
+    },
+  },
+  {
+    v: PROTOCOL_VERSION,
+    type: 'game.spectate.joined',
+    payload: {
+      roomId: 'room-1',
+      gameId: 'bomberman',
+      spectatorId: 'spectator-1',
       tick: 0,
       joinedAtMs: 1700000000000,
     },
@@ -337,6 +358,46 @@ describe('protocol message codec', () => {
         roomId: 'room-1',
         gameId: 'bomberman',
         playerId: 'player-1',
+        joinedAtMs: 1700000000000,
+      },
+    });
+
+    expect(() => decodeMessage(raw)).toThrow(ProtocolDecodeError);
+
+    const result = safeDecodeMessage(raw);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('invalid_message');
+    }
+  });
+
+  it('rejects malformed payload for game.spectate.join', () => {
+    const raw = JSON.stringify({
+      v: PROTOCOL_VERSION,
+      type: 'game.spectate.join',
+      payload: {
+        roomId: 'room-1',
+        guestId: 'guest-1',
+      },
+    });
+
+    expect(() => decodeMessage(raw)).toThrow(ProtocolDecodeError);
+
+    const result = safeDecodeMessage(raw);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('invalid_message');
+    }
+  });
+
+  it('rejects malformed payload for game.spectate.joined', () => {
+    const raw = JSON.stringify({
+      v: PROTOCOL_VERSION,
+      type: 'game.spectate.joined',
+      payload: {
+        roomId: 'room-1',
+        gameId: 'bomberman',
+        tick: 0,
         joinedAtMs: 1700000000000,
       },
     });

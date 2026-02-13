@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   leaderboardResponseSchema,
+  matchByRoomResponseSchema,
   matchHistoryResponseSchema,
   playerStatsResponseSchema,
 } from '@game-platform/protocol';
@@ -125,5 +126,23 @@ describe('gateway persistence HTTP API', () => {
 
     const invalidResponse = await fetch(`${baseUrl}/api/leaderboard?limit=0&offset=0`);
     expect(invalidResponse.status).toBe(400);
+  });
+
+  it('returns a match by room id and 404 for unknown room', async () => {
+    const foundResponse = await fetch(`${baseUrl}/api/matches/room-1`);
+    expect(foundResponse.status).toBe(200);
+
+    const foundBody = await foundResponse.json();
+    const foundParsed = matchByRoomResponseSchema.safeParse(foundBody);
+    expect(foundParsed.success).toBe(true);
+    if (foundParsed.success) {
+      expect(foundParsed.data.item.matchId).toBe('match-1');
+      expect(foundParsed.data.item.roomId).toBe('room-1');
+    }
+
+    const missingResponse = await fetch(`${baseUrl}/api/matches/room-missing`);
+    expect(missingResponse.status).toBe(404);
+    const missingBody = await missingResponse.json();
+    expect(missingBody.error?.code).toBe('not_found');
   });
 });

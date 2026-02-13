@@ -1,6 +1,7 @@
 import type {
   GameJoinAcceptedMessage,
   GameOverMessage,
+  GameSpectateJoinedMessage,
   LobbyAuthIssuedMessage,
   LobbyErrorMessage,
 } from '@game-platform/protocol';
@@ -42,8 +43,10 @@ export interface GameSessionState {
   reconnectAttempt: number;
   roomId: string;
   lobbyId: string;
+  sessionRole: 'player' | 'spectator' | null;
   auth: GameSessionAuthState | null;
   joinAccepted: GameJoinAcceptedMessage['payload'] | null;
+  spectateJoined: GameSpectateJoinedMessage['payload'] | null;
   latestSnapshot: BombermanSnapshot | null;
   latestSnapshotTick: number;
   recentEvents: GameSessionEventRecord[];
@@ -75,6 +78,10 @@ export type GameSessionAction =
       payload: GameJoinAcceptedMessage['payload'];
     }
   | {
+      type: 'game.spectate.joined';
+      payload: GameSpectateJoinedMessage['payload'];
+    }
+  | {
       type: 'game.snapshot';
       payload: {
         tick: number;
@@ -103,8 +110,10 @@ export function createInitialGameSessionState(roomId: string, lobbyId: string): 
     reconnectAttempt: 0,
     roomId,
     lobbyId,
+    sessionRole: null,
     auth: null,
     joinAccepted: null,
+    spectateJoined: null,
     latestSnapshot: null,
     latestSnapshotTick: 0,
     recentEvents: [],
@@ -143,7 +152,18 @@ export function gameSessionReducer(
     case 'game.join.accepted':
       return {
         ...state,
+        sessionRole: 'player',
         joinAccepted: action.payload,
+        spectateJoined: null,
+        connectionStatus: state.connectionStatus === 'game_over' ? 'game_over' : 'connected',
+      };
+
+    case 'game.spectate.joined':
+      return {
+        ...state,
+        sessionRole: 'spectator',
+        joinAccepted: null,
+        spectateJoined: action.payload,
         connectionStatus: state.connectionStatus === 'game_over' ? 'game_over' : 'connected',
       };
 

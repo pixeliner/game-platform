@@ -268,36 +268,9 @@ export class SqliteMatchRepository implements MatchRepository {
       normalizedQuery.offset,
     ) as unknown as MatchRow[];
 
-    const playersByMatchStatement = this.database.prepare(`
-      SELECT
-        mp.player_id,
-        mp.guest_id,
-        mp.nickname,
-        mp.rank,
-        mp.score,
-        mp.alive,
-        mp.eliminated_at_tick
-      FROM match_players mp
-      WHERE mp.match_id = ?
-      ORDER BY mp.rank ASC, mp.guest_id ASC
-    `);
-
     const items = matchRows.map((row) => {
-      const playerRows = playersByMatchStatement.all(row.match_id) as unknown as MatchPlayerRow[];
-      return {
-        matchId: row.match_id,
-        roomId: row.room_id,
-        lobbyId: row.lobby_id,
-        gameId: row.game_id,
-        seed: toNumber(row.seed),
-        tickRate: toNumber(row.tick_rate),
-        startedAtMs: toNumber(row.started_at_ms),
-        endedAtMs: toNumber(row.ended_at_ms),
-        endReason: row.end_reason,
-        winnerPlayerId: row.winner_player_id,
-        winnerGuestId: row.winner_guest_id,
-        players: playerRows.map(mapPlayerRow),
-      } satisfies MatchRecord;
+      const playerRows = this.getMatchPlayerRows(row.match_id);
+      return this.mapMatchRowToRecord(row, playerRows);
     });
 
     return {
@@ -308,6 +281,33 @@ export class SqliteMatchRepository implements MatchRepository {
         total,
       },
     };
+  }
+
+  public getMatchByRoomId(roomId: string): MatchRecord | null {
+    const statement = this.database.prepare(`
+      SELECT
+        m.match_id,
+        m.room_id,
+        m.lobby_id,
+        m.game_id,
+        m.seed,
+        m.tick_rate,
+        m.started_at_ms,
+        m.ended_at_ms,
+        m.end_reason,
+        m.winner_player_id,
+        m.winner_guest_id
+      FROM matches m
+      WHERE m.room_id = ?
+      LIMIT 1
+    `);
+    const row = statement.get(roomId) as MatchRow | undefined;
+    if (!row) {
+      return null;
+    }
+
+    const playerRows = this.getMatchPlayerRows(row.match_id);
+    return this.mapMatchRowToRecord(row, playerRows);
   }
 
   public getPlayerStats(query: StatsQueryInput): PlayerStatsResult {
@@ -569,5 +569,40 @@ export class SqliteMatchRepository implements MatchRepository {
         total,
       },
     };
+  }
+
+  private getMatchPlayerRows(matchId: string): MatchPlayerRow[] {
+    const playersByMatchStatement = this.database.prepare(`
+      SELECT
+        mp.player_id,
+        mp.guest_id,
+        mp.nickname,
+        mp.rank,
+        mp.score,
+        mp.alive,
+        mp.eliminated_at_tick
+      FROM match_players mp
+      WHERE mp.match_id = ?
+      ORDER BY mp.rank ASC, mp.guest_id ASC
+    `);
+
+    return playersByMatchStatement.all(matchId) as unknown as MatchPlayerRow[];
+  }
+
+  private mapMatchRowToRecord(row: MatchRow, playerRows: MatchPlayerRow[]): MatchRecord {
+    return {
+      matchId: row.match_id,
+      roomId: row.room_id,
+      lobbyId: row.lobby_id,
+      gameId: row.game_id,
+      seed: toNumber(row.seed),
+      tickRate: toNumber(row.tick_rate),
+      startedAtMs: toNumber(row.started_at_ms),
+      endedAtMs: toNumber(row.ended_at_ms),
+      endReason: row.end_reason,
+      winnerPlayerId: row.winner_player_id,
+      winnerGuestId: row.winner_guest_id,
+      players: playerRows.map(mapPlayerRow),
+    } satisfies MatchRecord;
   }
 }

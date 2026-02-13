@@ -92,3 +92,36 @@ main {
 .bomberman-gameover-overlay {
   @apply absolute inset-0 flex items-center justify-center bg-background/80 p-4 backdrop-blur-[1px];
 }
+
+.bomberman-results-table-wrap {
+  @apply overflow-x-auto rounded border border-border/70 bg-background/40;
+}
+
+.bomberman-results-table {
+  @apply w-full min-w-[560px] text-left text-sm;
+}
+
+.bomberman-results-table thead {
+  @apply bg-background/60 text-xs uppercase text-muted-foreground;
+}
+
+.bomberman-results-table th,
+.bomberman-results-table td {
+  @apply px-3 py-2;
+}
+
+.bomberman-results-table tbody tr {
+  @apply border-t border-border/60;
+}
+
+.bomberman-timeline-list {
+  @apply mt-2 space-y-1 rounded border border-border/70 bg-background/40 p-2 text-sm;
+}
+
+.bomberman-timeline-list li {
+  @apply flex flex-wrap items-center justify-between gap-2 rounded bg-background/30 px-2 py-1;
+}
+
+.bomberman-timeline-name {
+  @apply font-medium;
+}

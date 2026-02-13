@@ -13,6 +13,7 @@ export interface MatchRepository {
   close(): void;
   recordMatch(input: MatchRecord): void;
   listHistory(query: HistoryQueryInput): PaginatedResult<MatchRecord>;
+  getMatchByRoomId(roomId: string): MatchRecord | null;
   getPlayerStats(query: StatsQueryInput): PlayerStatsResult;
   listLeaderboard(query: LeaderboardQueryInput): PaginatedResult<LeaderboardEntry>;
 }

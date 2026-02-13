@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  fetchMatchByRoom,
   PersistenceHttpError,
   fetchLeaderboard,
   fetchMatchHistory,
@@ -120,5 +121,50 @@ describe('persistence-client', () => {
     const [calledUrl] = fetchSpy.mock.calls[0] ?? [];
     expect(String(calledUrl)).toContain('/api/stats/guest%20me');
     expect(String(calledUrl)).toContain('historyLimit=10');
+  });
+
+  it('requests match-by-room endpoint and validates response', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          item: {
+            matchId: 'match-1',
+            roomId: 'room-1',
+            lobbyId: 'lobby-1',
+            gameId: 'bomberman',
+            seed: 10,
+            tickRate: 20,
+            startedAtMs: 1000,
+            endedAtMs: 2000,
+            endReason: 'game_over',
+            winnerPlayerId: 'player-1',
+            winnerGuestId: 'guest-1',
+            players: [
+              {
+                playerId: 'player-1',
+                guestId: 'guest-1',
+                nickname: 'Alpha',
+                rank: 1,
+                score: 5,
+                alive: true,
+                eliminatedAtTick: null,
+              },
+            ],
+          },
+        }),
+        {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+          },
+        },
+      ),
+    );
+
+    const result = await fetchMatchByRoom('room-1');
+    expect(result.item.matchId).toBe('match-1');
+
+    const [calledUrl] = fetchSpy.mock.calls[0] ?? [];
+    expect(String(calledUrl)).toBe('http://127.0.0.1:8787/api/matches/room-1');
   });
 });

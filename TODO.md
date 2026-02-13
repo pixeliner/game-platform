@@ -53,13 +53,13 @@
 
 ## Milestone 9: Match UX & End Screen
 - [x] Add end-of-round screen with scoreboard
-- [ ] Show ranking, score, and elimination timeline
+- [x] Show ranking, score, and elimination timeline
 - [x] Add post-match actions (back to lobby / rematch-ready flow)
 
 ## Milestone 10: Reconnect + Spectators
-- [ ] Improve reconnect flow for active games (stateful rejoin UX)
-- [ ] Add late-join spectator mode for in-progress matches
-- [ ] Add gateway/web integration tests for reconnect and spectator flows
+- [x] Improve reconnect flow for active games (stateful rejoin UX)
+- [x] Add late-join spectator mode for in-progress matches
+- [x] Add gateway/web integration tests for reconnect and spectator flows
 
 ## Milestone 11: Achievements & Cosmetics
 - [ ] Add achievement model + unlock triggers

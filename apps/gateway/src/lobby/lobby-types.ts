@@ -16,6 +16,7 @@ export interface LobbyState {
   lobbyId: string;
   hostPlayerId: string;
   phase: LobbyPhase;
+  activeRoomId: string | null;
   selectedGameId: string | null;
   createdAtMs: number;
   updatedAtMs: number;
@@ -76,6 +77,7 @@ export interface LobbyView {
   lobbyId: string;
   hostPlayerId: string;
   phase: LobbyPhase;
+  activeRoomId: string | null;
   selectedGameId: string | null;
   players: Array<{
     playerId: string;

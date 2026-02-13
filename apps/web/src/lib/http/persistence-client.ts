@@ -1,6 +1,8 @@
 import {
   historyQuerySchema,
   leaderboardQuerySchema,
+  matchByRoomPathParamsSchema,
+  matchByRoomResponseSchema,
   matchHistoryResponseSchema,
   playerStatsPathParamsSchema,
   playerStatsQuerySchema,
@@ -8,6 +10,7 @@ import {
   leaderboardResponseSchema,
   type HistoryQuery,
   type LeaderboardQuery,
+  type MatchByRoomResponse,
   type MatchHistoryResponse,
   type PlayerStatsQuery,
   type PlayerStatsResponse,
@@ -126,4 +129,12 @@ export async function fetchPlayerStats(
   });
 
   return fetchJson(url, playerStatsResponseSchema);
+}
+
+export async function fetchMatchByRoom(roomId: string): Promise<MatchByRoomResponse> {
+  const path = matchByRoomPathParamsSchema.parse({
+    roomId,
+  });
+  const url = buildUrl(`/api/matches/${encodeURIComponent(path.roomId)}`, {});
+  return fetchJson(url, matchByRoomResponseSchema);
 }

@@ -37,6 +37,7 @@ export class LobbyStateMachine {
       lobbyId: input.lobbyId,
       hostPlayerId: host.playerId,
       phase: 'waiting',
+      activeRoomId: null,
       selectedGameId: null,
       createdAtMs: input.nowMs,
       updatedAtMs: input.nowMs,
@@ -243,9 +244,10 @@ export class LobbyStateMachine {
     };
   }
 
-  public setInGame(lobbyId: string, nowMs: number): LobbyState {
+  public setInGame(lobbyId: string, roomId: string, nowMs: number): LobbyState {
     const lobby = this.requireLobby(lobbyId);
     lobby.phase = 'in_game';
+    lobby.activeRoomId = roomId;
     lobby.updatedAtMs = nowMs;
     return lobby;
   }
@@ -253,6 +255,7 @@ export class LobbyStateMachine {
   public setWaitingAfterGame(lobbyId: string, nowMs: number): LobbyState {
     const lobby = this.requireLobby(lobbyId);
     lobby.phase = 'waiting';
+    lobby.activeRoomId = null;
     lobby.updatedAtMs = nowMs;
 
     for (const player of lobby.playersById.values()) {
@@ -295,6 +298,7 @@ export class LobbyStateMachine {
       lobbyId: lobby.lobbyId,
       hostPlayerId: lobby.hostPlayerId,
       phase: lobby.phase,
+      activeRoomId: lobby.activeRoomId,
       selectedGameId: lobby.selectedGameId,
       players,
       votesByPlayerId,

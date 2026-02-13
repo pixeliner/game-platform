@@ -18,6 +18,8 @@
 ### Game Session
 - game.join
 - game.join.accepted (server direct)
+- game.spectate.join
+- game.spectate.joined (server direct)
 - game.leave
 - game.input
 - game.snapshot
@@ -59,6 +61,14 @@
 - Gateway issues short-lived session token for ws reconnect
 - `lobby.join` may include optional `sessionToken` for reconnect intent
 - `lobby.state.players[*]` includes `isConnected` for reconnect visibility
+- `lobby.state.activeRoomId` indicates the currently active room while phase is `in_game`
+
+## Spectators
+- Late join spectators can attach to active rooms using:
+  - `game.spectate.join` payload `{ roomId, guestId, nickname }`
+  - `game.spectate.joined` payload `{ roomId, gameId, spectatorId, tick, joinedAtMs }`
+- Spectators receive `game.snapshot`, `game.event`, and `game.over`.
+- Spectators are read-only and cannot send `game.input`.
 
 ## Rematch Lifecycle
 - Match completion keeps lobby identity and vote selection intact.
@@ -83,6 +93,9 @@ Gateway exposes read-only analytics endpoints:
 - `GET /api/history`
   - query: `limit` (default 20, max 100), `offset` (default 0), `gameId?`, `guestId?`
   - response: `{ items, page }`
+- `GET /api/matches/:roomId`
+  - path: `roomId`
+  - response: `{ item }` (single persisted completed match for the room)
 - `GET /api/stats/:guestId`
   - query: `gameId?`, `historyLimit` (default 10, max 50), `historyOffset` (default 0)
   - response: `{ guestId, latestNickname, overall, byGame, recentMatches, page }`

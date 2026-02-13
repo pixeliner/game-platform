@@ -4,6 +4,8 @@ import {
   historyQuerySchema,
   leaderboardQuerySchema,
   leaderboardResponseSchema,
+  matchByRoomPathParamsSchema,
+  matchByRoomResponseSchema,
   matchHistoryResponseSchema,
   playerStatsPathParamsSchema,
   playerStatsQuerySchema,
@@ -97,6 +99,34 @@ export function createPersistenceApiHandler(repository: MatchRepository): {
         const payload = matchHistoryResponseSchema.safeParse(result);
         if (!payload.success) {
           writeError(response, 500, 'invalid_response', 'Generated history payload is invalid.', payload.error.issues);
+          return true;
+        }
+
+        writeJson(response, 200, payload.data);
+        return true;
+      }
+
+      const matchByRoomMatch = path.match(/^\/api\/matches\/([^/]+)$/);
+      if (matchByRoomMatch) {
+        const parsedPath = matchByRoomPathParamsSchema.safeParse({
+          roomId: decodeURIComponent(matchByRoomMatch[1] ?? ''),
+        });
+        if (!parsedPath.success) {
+          writeError(response, 400, 'invalid_path', 'Invalid match path parameters.', parsedPath.error.issues);
+          return true;
+        }
+
+        const match = repository.getMatchByRoomId(parsedPath.data.roomId);
+        if (!match) {
+          writeError(response, 404, 'not_found', 'Match was not found for room.');
+          return true;
+        }
+
+        const payload = matchByRoomResponseSchema.safeParse({
+          item: match,
+        });
+        if (!payload.success) {
+          writeError(response, 500, 'invalid_response', 'Generated match payload is invalid.', payload.error.issues);
           return true;
         }
 

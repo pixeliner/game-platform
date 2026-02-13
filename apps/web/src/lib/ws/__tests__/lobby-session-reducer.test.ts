@@ -34,6 +34,7 @@ describe('lobby-session-reducer', () => {
         lobbyId: 'lobby_1',
         hostPlayerId: 'player_1',
         phase: 'waiting',
+        activeRoomId: null,
         selectedGameId: 'bomberman',
         players: [],
         votesByPlayerId: {},

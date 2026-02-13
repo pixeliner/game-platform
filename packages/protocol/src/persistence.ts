@@ -33,6 +33,10 @@ export const playerStatsPathParamsSchema = z.object({
   guestId: idSchema,
 });
 
+export const matchByRoomPathParamsSchema = z.object({
+  roomId: idSchema,
+});
+
 export const matchPlayerResultSchema = z.object({
   playerId: idSchema,
   guestId: idSchema,
@@ -61,6 +65,10 @@ export const matchHistoryItemSchema = z.object({
 export const matchHistoryResponseSchema = z.object({
   items: z.array(matchHistoryItemSchema),
   page: pageSchema,
+});
+
+export const matchByRoomResponseSchema = z.object({
+  item: matchHistoryItemSchema,
 });
 
 const statsAggregateSchema = z.object({
@@ -118,10 +126,12 @@ export type HistoryQuery = z.infer<typeof historyQuerySchema>;
 export type PlayerStatsQuery = z.infer<typeof playerStatsQuerySchema>;
 export type LeaderboardQuery = z.infer<typeof leaderboardQuerySchema>;
 export type PlayerStatsPathParams = z.infer<typeof playerStatsPathParamsSchema>;
+export type MatchByRoomPathParams = z.infer<typeof matchByRoomPathParamsSchema>;
 
 export type MatchPlayerResult = z.infer<typeof matchPlayerResultSchema>;
 export type MatchHistoryItem = z.infer<typeof matchHistoryItemSchema>;
 export type MatchHistoryResponse = z.infer<typeof matchHistoryResponseSchema>;
+export type MatchByRoomResponse = z.infer<typeof matchByRoomResponseSchema>;
 export type PlayerStatsByGame = z.infer<typeof playerStatsByGameSchema>;
 export type PlayerStatsRecentMatch = z.infer<typeof playerStatsRecentMatchSchema>;
 export type PlayerStatsResponse = z.infer<typeof playerStatsResponseSchema>;

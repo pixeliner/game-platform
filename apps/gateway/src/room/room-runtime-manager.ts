@@ -29,6 +29,8 @@ interface ActiveRoomRuntime {
   runtime: EngineRoomRuntime<unknown>;
   joinedConnectionIds: Set<string>;
   connectedConnectionIds: Set<string>;
+  spectatorConnectionIds: Set<string>;
+  pendingGameOverEndedAtMs: number | undefined;
   idleTimeout: NodeJS.Timeout | undefined;
   stopped: boolean;
 }
@@ -43,10 +45,11 @@ interface RoomRuntimeManagerDependencies {
   snapshotEveryTicks: number;
   bombermanMovementModel: BombermanMovementModel;
   roomIdleTimeoutMs: number;
-  onRoomGameOver?: ((input: {
+  onRoomStopped?: ((input: {
     lobbyId: string;
     roomId: string;
-    endedAtMs: number;
+    reason: string;
+    stoppedAtMs: number;
   }) => void) | undefined;
   createScheduler?: () => TickScheduler;
   setTimer?: (fn: () => void, ms: number) => NodeJS.Timeout;
@@ -89,7 +92,7 @@ export class RoomRuntimeManager {
   private readonly snapshotEveryTicks: number;
   private readonly bombermanMovementModel: BombermanMovementModel;
   private readonly roomIdleTimeoutMs: number;
-  private readonly onRoomGameOver: RoomRuntimeManagerDependencies['onRoomGameOver'];
+  private readonly onRoomStopped: RoomRuntimeManagerDependencies['onRoomStopped'];
   private readonly createScheduler: (() => TickScheduler) | undefined;
   private readonly setTimer: (fn: () => void, ms: number) => NodeJS.Timeout;
   private readonly clearTimer: (timeout: NodeJS.Timeout) => void;
@@ -105,7 +108,7 @@ export class RoomRuntimeManager {
     this.snapshotEveryTicks = dependencies.snapshotEveryTicks;
     this.bombermanMovementModel = dependencies.bombermanMovementModel;
     this.roomIdleTimeoutMs = dependencies.roomIdleTimeoutMs;
-    this.onRoomGameOver = dependencies.onRoomGameOver;
+    this.onRoomStopped = dependencies.onRoomStopped;
     this.createScheduler = dependencies.createScheduler;
     this.setTimer = dependencies.setTimer ?? setTimeout;
     this.clearTimer = dependencies.clearTimer ?? clearTimeout;
@@ -149,7 +152,7 @@ export class RoomRuntimeManager {
         ...(scheduler ? { scheduler } : {}),
         callbacks: {
           onSnapshot: (emission): void => {
-            this.broadcastToJoined(runtimeEntry, {
+            this.broadcastToSubscribers(runtimeEntry, {
               v: PROTOCOL_VERSION,
               type: 'game.snapshot',
               payload: {
@@ -162,7 +165,7 @@ export class RoomRuntimeManager {
           },
 
           onEvent: (emission): void => {
-            this.broadcastToJoined(runtimeEntry, {
+            this.broadcastToSubscribers(runtimeEntry, {
               v: PROTOCOL_VERSION,
               type: 'game.event',
               payload: {
@@ -177,6 +180,7 @@ export class RoomRuntimeManager {
 
           onGameOver: (emission): void => {
             const endedAtMs = this.clock.nowMs();
+            runtimeEntry.pendingGameOverEndedAtMs = endedAtMs;
             try {
               const rawResults = Array.isArray(emission.results) ? emission.results : [];
               this.matchPersistenceService.persistCompletedMatch({
@@ -197,7 +201,7 @@ export class RoomRuntimeManager {
               ? emission.results.filter((item) => isValidGameResultEntry(item))
               : [];
 
-            this.broadcastToJoined(runtimeEntry, {
+            this.broadcastToSubscribers(runtimeEntry, {
               v: PROTOCOL_VERSION,
               type: 'game.over',
               payload: {
@@ -207,22 +211,17 @@ export class RoomRuntimeManager {
                 results,
               },
             });
-
-            this.markRoomStopped(runtimeEntry);
-            this.onRoomGameOver?.({
-              lobbyId: room.lobbyId,
-              roomId: room.roomId,
-              endedAtMs,
-            });
           },
 
-          onStopped: (): void => {
-            this.markRoomStopped(runtimeEntry);
+          onStopped: (emission): void => {
+            this.markRoomStopped(runtimeEntry, emission.reason);
           },
         },
       }),
       joinedConnectionIds: new Set(),
       connectedConnectionIds: new Set(),
+      spectatorConnectionIds: new Set(),
+      pendingGameOverEndedAtMs: undefined,
       idleTimeout: undefined,
       stopped: false,
     };
@@ -235,6 +234,14 @@ export class RoomRuntimeManager {
     switch (message.type) {
       case 'game.join':
         this.handleGameJoin(connectionId, message.payload.roomId, message.payload.playerId);
+        return;
+      case 'game.spectate.join':
+        this.handleGameSpectateJoin(
+          connectionId,
+          message.payload.roomId,
+          message.payload.guestId,
+          message.payload.nickname,
+        );
         return;
       case 'game.input':
         this.handleGameInput(connectionId, message.payload.roomId, message.payload.playerId, message.payload.tick, message.payload.input);
@@ -257,6 +264,7 @@ export class RoomRuntimeManager {
 
     runtimeEntry.connectedConnectionIds.delete(connectionId);
     runtimeEntry.joinedConnectionIds.delete(connectionId);
+    runtimeEntry.spectatorConnectionIds.delete(connectionId);
 
     this.evaluateIdleState(runtimeEntry);
   }
@@ -292,6 +300,7 @@ export class RoomRuntimeManager {
       throw new LobbyServiceError('invalid_state', 'Room runtime has stopped.');
     }
 
+    this.clearExistingRoomBinding(connectionId, context);
     runtimeEntry.joinedConnectionIds.add(connectionId);
     runtimeEntry.connectedConnectionIds.add(connectionId);
     this.clearIdleTimer(runtimeEntry);
@@ -302,6 +311,10 @@ export class RoomRuntimeManager {
 
     this.connectionRegistry.patch(connectionId, {
       gameRoomId: roomId,
+      gameSessionRole: 'player',
+      spectatorId: undefined,
+      spectatorGuestId: undefined,
+      spectatorNickname: undefined,
     });
 
     this.transport.sendToConnection(connectionId, {
@@ -311,6 +324,63 @@ export class RoomRuntimeManager {
         roomId,
         gameId: room.gameId,
         playerId,
+        tick: runtimeEntry.runtime.getTick(),
+        joinedAtMs: this.clock.nowMs(),
+      },
+    });
+
+    this.transport.sendToConnection(connectionId, {
+      v: PROTOCOL_VERSION,
+      type: 'game.snapshot',
+      payload: {
+        roomId,
+        gameId: room.gameId,
+        tick: runtimeEntry.runtime.getTick(),
+        snapshot: runtimeEntry.runtime.getLatestSnapshot(),
+      },
+    });
+  }
+
+  private handleGameSpectateJoin(
+    connectionId: string,
+    roomId: string,
+    guestId: string,
+    nickname: string,
+  ): void {
+    const room = this.roomManager.getRoom(roomId);
+    if (!room || room.status === 'stopped') {
+      throw new LobbyServiceError('invalid_state', 'Room is not active.');
+    }
+
+    const runtimeEntry = this.requireRuntimeEntry(roomId);
+    if (runtimeEntry.stopped) {
+      throw new LobbyServiceError('invalid_state', 'Room runtime has stopped.');
+    }
+
+    const context = this.connectionRegistry.get(connectionId);
+    this.clearExistingRoomBinding(connectionId, context);
+
+    const spectatorId =
+      context?.gameSessionRole === 'spectator' && context.gameRoomId === roomId && context.spectatorId
+        ? context.spectatorId
+        : `spectator_${connectionId}`;
+
+    runtimeEntry.spectatorConnectionIds.add(connectionId);
+    this.connectionRegistry.patch(connectionId, {
+      gameRoomId: roomId,
+      gameSessionRole: 'spectator',
+      spectatorId,
+      spectatorGuestId: guestId,
+      spectatorNickname: nickname,
+    });
+
+    this.transport.sendToConnection(connectionId, {
+      v: PROTOCOL_VERSION,
+      type: 'game.spectate.joined',
+      payload: {
+        roomId,
+        gameId: room.gameId,
+        spectatorId,
         tick: runtimeEntry.runtime.getTick(),
         joinedAtMs: this.clock.nowMs(),
       },
@@ -365,6 +435,10 @@ export class RoomRuntimeManager {
 
     this.connectionRegistry.patch(connectionId, {
       gameRoomId: undefined,
+      gameSessionRole: undefined,
+      spectatorId: undefined,
+      spectatorGuestId: undefined,
+      spectatorNickname: undefined,
     });
 
     this.evaluateIdleState(runtimeEntry);
@@ -379,10 +453,33 @@ export class RoomRuntimeManager {
     return runtimeEntry;
   }
 
-  private broadcastToJoined(runtimeEntry: ActiveRoomRuntime, message: ServerMessage): void {
+  private broadcastToSubscribers(runtimeEntry: ActiveRoomRuntime, message: ServerMessage): void {
     for (const connectionId of runtimeEntry.joinedConnectionIds) {
       this.transport.sendToConnection(connectionId, message);
     }
+    for (const connectionId of runtimeEntry.spectatorConnectionIds) {
+      this.transport.sendToConnection(connectionId, message);
+    }
+  }
+
+  private clearExistingRoomBinding(
+    connectionId: string,
+    context: GatewayConnectionContext | undefined,
+  ): void {
+    const previousRoomId = context?.gameRoomId;
+    if (!previousRoomId) {
+      return;
+    }
+
+    const previousRuntimeEntry = this.runtimesByRoomId.get(previousRoomId);
+    if (!previousRuntimeEntry) {
+      return;
+    }
+
+    previousRuntimeEntry.connectedConnectionIds.delete(connectionId);
+    previousRuntimeEntry.joinedConnectionIds.delete(connectionId);
+    previousRuntimeEntry.spectatorConnectionIds.delete(connectionId);
+    this.evaluateIdleState(previousRuntimeEntry);
   }
 
   private evaluateIdleState(runtimeEntry: ActiveRoomRuntime): void {
@@ -407,7 +504,6 @@ export class RoomRuntimeManager {
     runtimeEntry.idleTimeout = this.setTimer(() => {
       runtimeEntry.idleTimeout = undefined;
       runtimeEntry.runtime.stop('idle_timeout');
-      this.markRoomStopped(runtimeEntry);
     }, this.roomIdleTimeoutMs);
   }
 
@@ -420,13 +516,25 @@ export class RoomRuntimeManager {
     runtimeEntry.idleTimeout = undefined;
   }
 
-  private markRoomStopped(runtimeEntry: ActiveRoomRuntime): void {
+  private markRoomStopped(runtimeEntry: ActiveRoomRuntime, reason: string): void {
     if (runtimeEntry.stopped) {
       return;
     }
 
+    const stoppedAtMs =
+      reason === 'game_over' && runtimeEntry.pendingGameOverEndedAtMs !== undefined
+        ? runtimeEntry.pendingGameOverEndedAtMs
+        : this.clock.nowMs();
+
     runtimeEntry.stopped = true;
+    runtimeEntry.pendingGameOverEndedAtMs = undefined;
     this.clearIdleTimer(runtimeEntry);
-    this.roomManager.markStopped(runtimeEntry.room.roomId, this.clock.nowMs());
+    this.roomManager.markStopped(runtimeEntry.room.roomId, stoppedAtMs);
+    this.onRoomStopped?.({
+      lobbyId: runtimeEntry.room.lobbyId,
+      roomId: runtimeEntry.room.roomId,
+      reason,
+      stoppedAtMs,
+    });
   }
 }

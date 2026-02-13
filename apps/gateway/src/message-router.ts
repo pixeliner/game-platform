@@ -25,6 +25,7 @@ export class GatewayMessageRouter {
           this.lobbyService.handleLobbyClientMessage(connectionId, message);
           return;
         case 'game.join':
+        case 'game.spectate.join':
         case 'game.leave':
         case 'game.input':
           this.roomRuntimeManager.handleGameMessage(connectionId, message);

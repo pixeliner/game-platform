@@ -169,8 +169,8 @@ export function createGatewayServer(options: CreateGatewayServerOptions): Gatewa
     snapshotEveryTicks: options.config.snapshotEveryTicks,
     bombermanMovementModel: options.config.bombermanMovementModel,
     roomIdleTimeoutMs: options.config.roomIdleTimeoutMs,
-    onRoomGameOver: ({ lobbyId }) => {
-      lobbyService?.handleRoomGameOver(lobbyId);
+    onRoomStopped: ({ lobbyId, reason }) => {
+      lobbyService?.handleRoomStopped(lobbyId, reason);
     },
   });
 

@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Button } from '@/src/components/ui/button';
 import { CreateLobbyForm } from '@/src/features/lobby/components/create-lobby-form';
 import { JoinLobbyForm } from '@/src/features/lobby/components/join-lobby-form';
+import { WatchMatchForm } from '@/src/features/lobby/components/watch-match-form';
 import { resolveGatewayWebSocketUrl } from '@/src/lib/env';
 
 export default function HomePage(): React.JSX.Element {
@@ -31,9 +32,10 @@ export default function HomePage(): React.JSX.Element {
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2">
+      <section className="grid gap-4 lg:grid-cols-3">
         <CreateLobbyForm />
         <JoinLobbyForm />
+        <WatchMatchForm />
       </section>
     </main>
   );

@@ -29,6 +29,7 @@ describe('LobbyStateMachine', () => {
 
     expect(lobby.hostPlayerId).toBe('player-1');
     expect(lobby.phase).toBe('waiting');
+    expect(lobby.activeRoomId).toBeNull();
     expect(lobby.playersById.get('player-1')?.isHost).toBe(true);
   });
 
@@ -219,11 +220,12 @@ describe('LobbyStateMachine', () => {
       requestedByPlayerId: 'player-1',
       nowMs: 6,
     });
-    machine.setInGame('lobby-1', 7);
+    machine.setInGame('lobby-1', 'room-1', 7);
 
     const resetLobby = machine.setWaitingAfterGame('lobby-1', 8);
 
     expect(resetLobby.phase).toBe('waiting');
+    expect(resetLobby.activeRoomId).toBeNull();
     expect(resetLobby.selectedGameId).toBe('bomberman');
     expect(resetLobby.playersById.get('player-1')?.isReady).toBe(false);
     expect(resetLobby.playersById.get('player-2')?.isReady).toBe(false);

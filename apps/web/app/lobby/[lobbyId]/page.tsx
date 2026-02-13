@@ -16,6 +16,7 @@ import { VotePanel } from '@/src/features/lobby/components/vote-panel';
 import { Button } from '@/src/components/ui/button';
 import { GAME_CATALOG } from '@/src/lib/game-catalog';
 import { useLobbyConnection } from '@/src/hooks/use-lobby-connection';
+import { setActiveGameSessionRecord } from '@/src/lib/storage/active-game-session-store';
 
 function getStartDisabledReason(
   lobbyState: LobbyStateMessage['payload'] | null,
@@ -55,6 +56,8 @@ function getStartDisabledReason(
   return null;
 }
 
+const ACTIVE_GAME_SESSION_TTL_MS = 6 * 60 * 60 * 1000;
+
 export default function LobbyPage(): React.JSX.Element {
   const params = useParams<{ lobbyId: string }>();
   const searchParams = useSearchParams();
@@ -75,6 +78,12 @@ export default function LobbyPage(): React.JSX.Element {
       router.replace(`/lobby/${encodeURIComponent(lobbyId)}`);
     },
     onStartAccepted: (payload) => {
+      setActiveGameSessionRecord({
+        roomId: payload.roomId,
+        lobbyId: payload.lobbyId,
+        mode: 'player',
+        expiresAtMs: Date.now() + ACTIVE_GAME_SESSION_TTL_MS,
+      });
       router.push(`/game/${encodeURIComponent(payload.roomId)}?lobbyId=${encodeURIComponent(payload.lobbyId)}`);
     },
   });
@@ -175,6 +184,22 @@ export default function LobbyPage(): React.JSX.Element {
         <Button asChild variant="outline" size="sm">
           <Link href="/stats/me">My Stats</Link>
         </Button>
+        {lobbyState?.phase === 'in_game' && lobbyState.activeRoomId ? (
+          <>
+            <Button asChild variant="secondary" size="sm">
+              <Link
+                href={`/game/${encodeURIComponent(lobbyState.activeRoomId)}?lobbyId=${encodeURIComponent(lobbyState.lobbyId)}&mode=player`}
+              >
+                Resume Match
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/game/${encodeURIComponent(lobbyState.activeRoomId)}?mode=spectator`}>
+                Watch Match
+              </Link>
+            </Button>
+          </>
+        ) : null}
       </div>
 
       {lobbyState ? (
@@ -182,6 +207,7 @@ export default function LobbyPage(): React.JSX.Element {
           <LobbyHeader
             lobbyId={lobbyState.lobbyId}
             phase={lobbyState.phase}
+            activeRoomId={lobbyState.activeRoomId}
             selectedGameId={lobbyState.selectedGameId}
             playerCount={lobbyState.players.length}
             connectedCount={lobbyState.players.filter((player) => player.isConnected).length}
