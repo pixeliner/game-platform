@@ -1,14 +1,14 @@
 # TODO (Milestones)
 
 ## Milestone 0: Tooling & Repo
-- [ ] Create Turborepo + TypeScript workspace layout
-- [ ] Add lint/format (eslint + prettier) + tsconfig base
-- [ ] Add test runner (vitest) per package + CI pipeline (later)
+- [x] Create Turborepo + TypeScript workspace layout
+- [x] Add lint/format (eslint + prettier) + tsconfig base
+- [x] Add test runner (vitest) per package + CI pipeline (later)
 
 ## Milestone 1: Protocol & Contracts
-- [ ] packages/protocol: zod schemas for lobby + game messages
-- [ ] Add protocol versioning + codecs
-- [ ] Add protocol tests (roundtrip)
+- [x] packages/protocol: zod schemas for lobby + game messages
+- [x] Add protocol versioning + codecs
+- [x] Add protocol tests (roundtrip)
 
 ## Milestone 2: Gateway (Rooms)
 - [ ] apps/gateway: websocket server
