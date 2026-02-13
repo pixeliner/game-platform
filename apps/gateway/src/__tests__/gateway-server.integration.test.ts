@@ -272,6 +272,7 @@ describe('gateway websocket integration', () => {
       reconnectGraceMs: 1_000,
       tickRate: 20,
       snapshotEveryTicks: 2,
+      lobbyMaxPlayers: 4,
       bombermanMovementModel: 'grid_smooth',
       roomIdleTimeoutMs: 100,
       sessionSecret: 'test-secret',
@@ -305,6 +306,71 @@ describe('gateway websocket integration', () => {
     expect(setup.lobbyId).toBeTruthy();
     expect(setup.hostToken).toBeTruthy();
     expect(setup.guestToken).toBeTruthy();
+  });
+
+  it('enforces password-protected lobby joins', async () => {
+    const host = await connectClient(url);
+    clients.push(host.socket);
+    send(host, {
+      v: 1,
+      type: 'lobby.create',
+      payload: {
+        guestId: 'guest-host',
+        nickname: 'Host',
+        lobbyName: 'Secret LAN',
+        password: 'secret-pass',
+      },
+    });
+
+    const authIssued = await waitForMessage(host, isAuthIssued);
+    await waitForMessage(host, isLobbyState);
+
+    const missingPasswordClient = await connectClient(url);
+    clients.push(missingPasswordClient.socket);
+    send(missingPasswordClient, {
+      v: 1,
+      type: 'lobby.join',
+      payload: {
+        lobbyId: authIssued.payload.lobbyId,
+        guestId: 'guest-missing',
+        nickname: 'NoPass',
+      },
+    });
+    const missingPasswordError = await waitForMessage(missingPasswordClient, isLobbyError);
+    expect(missingPasswordError.payload.code).toBe('invalid_password');
+
+    const wrongPasswordClient = await connectClient(url);
+    clients.push(wrongPasswordClient.socket);
+    send(wrongPasswordClient, {
+      v: 1,
+      type: 'lobby.join',
+      payload: {
+        lobbyId: authIssued.payload.lobbyId,
+        guestId: 'guest-wrong',
+        nickname: 'WrongPass',
+        password: 'incorrect',
+      },
+    });
+    const wrongPasswordError = await waitForMessage(wrongPasswordClient, isLobbyError);
+    expect(wrongPasswordError.payload.code).toBe('invalid_password');
+
+    const validPasswordClient = await connectClient(url);
+    clients.push(validPasswordClient.socket);
+    send(validPasswordClient, {
+      v: 1,
+      type: 'lobby.join',
+      payload: {
+        lobbyId: authIssued.payload.lobbyId,
+        guestId: 'guest-ok',
+        nickname: 'CorrectPass',
+        password: 'secret-pass',
+      },
+    });
+
+    const joinAuthIssued = await waitForMessage(validPasswordClient, isAuthIssued);
+    expect(joinAuthIssued.payload.lobbyId).toBe(authIssued.payload.lobbyId);
+    const state = await waitForMessage(validPasswordClient, isLobbyState);
+    expect(state.payload.players.length).toBe(2);
   });
 
   it('broadcasts chat messages', async () => {

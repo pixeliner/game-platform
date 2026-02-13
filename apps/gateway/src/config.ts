@@ -8,6 +8,7 @@ export interface GatewayConfig {
   reconnectGraceMs: number;
   tickRate: number;
   snapshotEveryTicks: number;
+  lobbyMaxPlayers: number;
   bombermanMovementModel: BombermanMovementModel;
   roomIdleTimeoutMs: number;
   sessionSecret: string;
@@ -20,6 +21,7 @@ const DEFAULT_SESSION_TTL_MS = 900_000;
 const DEFAULT_RECONNECT_GRACE_MS = 120_000;
 const DEFAULT_TICK_RATE = 20;
 const DEFAULT_SNAPSHOT_EVERY_TICKS = 2;
+const DEFAULT_LOBBY_MAX_PLAYERS = 4;
 const DEFAULT_BOMBERMAN_MOVEMENT_MODEL = 'grid_smooth' satisfies BombermanMovementModel;
 const DEFAULT_ROOM_IDLE_TIMEOUT_MS = 30_000;
 const DEFAULT_SQLITE_PATH = './.data/game-platform.sqlite';
@@ -66,6 +68,11 @@ export function loadGatewayConfig(env: NodeJS.ProcessEnv = process.env): Gateway
       'GATEWAY_SNAPSHOT_EVERY_TICKS',
       env.GATEWAY_SNAPSHOT_EVERY_TICKS,
       DEFAULT_SNAPSHOT_EVERY_TICKS,
+    ),
+    lobbyMaxPlayers: readPositiveInt(
+      'GATEWAY_LOBBY_MAX_PLAYERS',
+      env.GATEWAY_LOBBY_MAX_PLAYERS,
+      DEFAULT_LOBBY_MAX_PLAYERS,
     ),
     bombermanMovementModel: readBombermanMovementModel(env.GATEWAY_BOMBERMAN_MOVEMENT_MODEL),
     roomIdleTimeoutMs: readPositiveInt(

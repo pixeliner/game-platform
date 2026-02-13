@@ -5,6 +5,8 @@ export const LOBBY_ERROR_CODES = [
   'already_in_lobby',
   'duplicate_connection',
   'invalid_session_token',
+  'invalid_password',
+  'lobby_full',
   'unauthorized',
   'not_enough_players',
   'not_ready',

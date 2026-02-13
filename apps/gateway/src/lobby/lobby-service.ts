@@ -16,6 +16,7 @@ import type {
   ConnectionRegistry,
   GatewayTransport,
   IdGenerator,
+  LobbyPasswordService,
   RoomRuntimeManager,
   SessionTokenService,
 } from '../types.js';
@@ -31,6 +32,8 @@ interface LobbyServiceDependencies {
   transport: GatewayTransport;
   idGenerator: IdGenerator;
   clock: Clock;
+  lobbyPasswordService: LobbyPasswordService;
+  lobbyMaxPlayers: number;
   reconnectGraceMs: number;
   tickRate: number;
   setTimer?: (fn: () => void, ms: number) => NodeJS.Timeout;
@@ -54,6 +57,8 @@ export class LobbyService {
   private readonly transport: GatewayTransport;
   private readonly idGenerator: IdGenerator;
   private readonly clock: Clock;
+  private readonly lobbyPasswordService: LobbyPasswordService;
+  private readonly lobbyMaxPlayers: number;
   private readonly reconnectGraceMs: number;
   private readonly tickRate: number;
   private readonly setTimer: (fn: () => void, ms: number) => NodeJS.Timeout;
@@ -69,6 +74,8 @@ export class LobbyService {
     this.transport = dependencies.transport;
     this.idGenerator = dependencies.idGenerator;
     this.clock = dependencies.clock;
+    this.lobbyPasswordService = dependencies.lobbyPasswordService;
+    this.lobbyMaxPlayers = dependencies.lobbyMaxPlayers;
     this.reconnectGraceMs = dependencies.reconnectGraceMs;
     this.tickRate = dependencies.tickRate;
     this.setTimer = dependencies.setTimer ?? setTimeout;
@@ -81,12 +88,18 @@ export class LobbyService {
     const nowMs = this.clock.nowMs();
     const lobbyId = this.idGenerator.next('lobby');
     const playerId = this.idGenerator.next('player');
+    const passwordHash = message.payload.password
+      ? this.lobbyPasswordService.hashPassword(message.payload.password)
+      : null;
 
     this.stateMachine.createLobby({
       lobbyId,
       playerId,
       guestId: message.payload.guestId,
       nickname: message.payload.nickname,
+      lobbyName: message.payload.lobbyName ?? 'LAN Session',
+      maxPlayers: this.lobbyMaxPlayers,
+      passwordHash,
       nowMs,
     });
 
@@ -155,6 +168,24 @@ export class LobbyService {
       );
       this.broadcastLobbyState(reconnectClaims.lobbyId);
       return;
+    }
+
+    const lobby = this.stateMachine.getLobby(message.payload.lobbyId);
+    if (!lobby) {
+      throw new LobbyServiceError('lobby_not_found', 'Lobby was not found.', {
+        lobbyId: message.payload.lobbyId,
+      });
+    }
+
+    if (lobby.passwordHash) {
+      if (
+        !message.payload.password ||
+        !this.lobbyPasswordService.verifyPassword(message.payload.password, lobby.passwordHash)
+      ) {
+        throw new LobbyServiceError('invalid_password', 'Lobby password is invalid.', {
+          lobbyId: message.payload.lobbyId,
+        });
+      }
     }
 
     const playerId = this.idGenerator.next('player');

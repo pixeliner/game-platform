@@ -24,6 +24,9 @@ describe('LobbyStateMachine', () => {
       playerId: 'player-1',
       guestId: 'guest-1',
       nickname: 'Host',
+      lobbyName: 'LAN Session',
+      maxPlayers: 4,
+      passwordHash: null,
       nowMs: 1,
     });
 
@@ -41,6 +44,9 @@ describe('LobbyStateMachine', () => {
       playerId: 'player-1',
       guestId: 'guest-1',
       nickname: 'Host',
+      lobbyName: 'LAN Session',
+      maxPlayers: 4,
+      passwordHash: null,
       nowMs: 1,
     });
 
@@ -57,6 +63,41 @@ describe('LobbyStateMachine', () => {
     expect(updated?.playersById.get('player-2')?.isHost).toBe(true);
   });
 
+  it('rejects joins when lobby reaches max player capacity', () => {
+    const machine = new LobbyStateMachine();
+
+    machine.createLobby({
+      lobbyId: 'lobby-1',
+      playerId: 'player-1',
+      guestId: 'guest-1',
+      nickname: 'Host',
+      lobbyName: 'LAN Session',
+      maxPlayers: 2,
+      passwordHash: null,
+      nowMs: 1,
+    });
+
+    machine.joinLobby({
+      lobbyId: 'lobby-1',
+      playerId: 'player-2',
+      guestId: 'guest-2',
+      nickname: 'Guest',
+      nowMs: 2,
+    });
+
+    expectLobbyError(
+      () =>
+        machine.joinLobby({
+          lobbyId: 'lobby-1',
+          playerId: 'player-3',
+          guestId: 'guest-3',
+          nickname: 'Guest 2',
+          nowMs: 3,
+        }),
+      'lobby_full',
+    );
+  });
+
   it('applies majority vote and host override', () => {
     const machine = new LobbyStateMachine();
 
@@ -65,6 +106,9 @@ describe('LobbyStateMachine', () => {
       playerId: 'player-1',
       guestId: 'guest-1',
       nickname: 'Host',
+      lobbyName: 'LAN Session',
+      maxPlayers: 4,
+      passwordHash: null,
       nowMs: 1,
     });
     machine.joinLobby({
@@ -117,6 +161,9 @@ describe('LobbyStateMachine', () => {
       playerId: 'player-1',
       guestId: 'guest-1',
       nickname: 'Host',
+      lobbyName: 'LAN Session',
+      maxPlayers: 4,
+      passwordHash: null,
       nowMs: 1,
     });
 
@@ -186,6 +233,9 @@ describe('LobbyStateMachine', () => {
       playerId: 'player-1',
       guestId: 'guest-1',
       nickname: 'Host',
+      lobbyName: 'LAN Session',
+      maxPlayers: 4,
+      passwordHash: null,
       nowMs: 1,
     });
     machine.joinLobby({

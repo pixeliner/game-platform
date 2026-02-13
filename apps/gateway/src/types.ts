@@ -6,6 +6,7 @@ import type {
   ServerMessage,
 } from '@game-platform/protocol';
 import type { RoomRecord } from './room/room-manager.js';
+import type { LobbyPasswordHash } from './lobby/lobby-types.js';
 
 export interface GatewayConnectionContext {
   connectionId: string;
@@ -55,6 +56,11 @@ export interface IssuedSessionToken {
 export interface SessionTokenService {
   issueSessionToken(input: ReconnectClaims): IssuedSessionToken;
   verifySessionToken(token: string): ReconnectClaims | null;
+}
+
+export interface LobbyPasswordService {
+  hashPassword(password: string): LobbyPasswordHash;
+  verifyPassword(password: string, hash: LobbyPasswordHash): boolean;
 }
 
 export interface MessageRouter {

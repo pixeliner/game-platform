@@ -60,6 +60,7 @@ describe('gateway persistence HTTP API', () => {
       reconnectGraceMs: 1_000,
       tickRate: 20,
       snapshotEveryTicks: 2,
+      lobbyMaxPlayers: 4,
       bombermanMovementModel: 'grid_smooth',
       roomIdleTimeoutMs: 100,
       sessionSecret: 'test-secret',

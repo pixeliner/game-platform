@@ -9,6 +9,7 @@ import type { MatchRepository } from '@game-platform/storage';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 
 import type { GatewayConfig } from './config.js';
+import { createLobbyDiscoveryApiHandler } from './http/lobby-discovery-api.js';
 import { createPersistenceApiHandler } from './http/persistence-api.js';
 import type { LobbyStateMachine } from './lobby/lobby-state-machine.js';
 import { LobbyService } from './lobby/lobby-service.js';
@@ -23,6 +24,7 @@ import type {
   GatewayConnectionContext,
   GatewayTransport,
   IdGenerator,
+  LobbyPasswordService,
   SessionTokenService,
 } from './types.js';
 
@@ -38,6 +40,7 @@ export interface CreateGatewayServerOptions {
   stateMachine: LobbyStateMachine;
   roomManager: RoomManager;
   sessionTokenService: SessionTokenService;
+  lobbyPasswordService: LobbyPasswordService;
   matchRepository: MatchRepository;
 }
 
@@ -65,8 +68,13 @@ function rawDataToText(data: RawData): string {
 }
 
 export function createGatewayServer(options: CreateGatewayServerOptions): GatewayServer {
+  const lobbyDiscoveryApi = createLobbyDiscoveryApiHandler(options.stateMachine);
   const persistenceApi = createPersistenceApiHandler(options.matchRepository);
   const server = createServer((request, response) => {
+    if (lobbyDiscoveryApi.handle(request, response)) {
+      return;
+    }
+
     if (persistenceApi.handle(request, response)) {
       return;
     }
@@ -183,6 +191,8 @@ export function createGatewayServer(options: CreateGatewayServerOptions): Gatewa
     transport,
     idGenerator: options.idGenerator,
     clock: options.clock,
+    lobbyPasswordService: options.lobbyPasswordService,
+    lobbyMaxPlayers: options.config.lobbyMaxPlayers,
     reconnectGraceMs: options.config.reconnectGraceMs,
     tickRate: options.config.tickRate,
   });

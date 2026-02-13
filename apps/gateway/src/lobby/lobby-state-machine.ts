@@ -3,6 +3,7 @@ import { computeSelectedGameId } from './lobby-selection.js';
 import type {
   CreateLobbyInput,
   JoinLobbyInput,
+  LobbyDiscoveryView,
   LobbyPlayerState,
   LobbyState,
   LobbyView,
@@ -35,10 +36,13 @@ export class LobbyStateMachine {
 
     const lobby: LobbyState = {
       lobbyId: input.lobbyId,
+      lobbyName: input.lobbyName,
       hostPlayerId: host.playerId,
       phase: 'waiting',
       activeRoomId: null,
       selectedGameId: null,
+      maxPlayers: input.maxPlayers,
+      passwordHash: input.passwordHash,
       createdAtMs: input.nowMs,
       updatedAtMs: input.nowMs,
       playersById: new Map([[host.playerId, host]]),
@@ -53,6 +57,12 @@ export class LobbyStateMachine {
     const lobby = this.requireLobby(input.lobbyId);
     if (lobby.phase !== 'waiting') {
       throw new LobbyServiceError('invalid_state', 'Lobby is not accepting new players.', {
+        lobbyId: input.lobbyId,
+      });
+    }
+
+    if (lobby.playersById.size >= lobby.maxPlayers) {
+      throw new LobbyServiceError('lobby_full', 'Lobby has reached max player capacity.', {
         lobbyId: input.lobbyId,
       });
     }
@@ -296,13 +306,45 @@ export class LobbyStateMachine {
 
     return {
       lobbyId: lobby.lobbyId,
+      lobbyName: lobby.lobbyName,
       hostPlayerId: lobby.hostPlayerId,
       phase: lobby.phase,
       activeRoomId: lobby.activeRoomId,
       selectedGameId: lobby.selectedGameId,
+      requiresPassword: lobby.passwordHash !== null,
+      maxPlayers: lobby.maxPlayers,
       players,
       votesByPlayerId,
     };
+  }
+
+  public listLobbyViews(): LobbyDiscoveryView[] {
+    return [...this.lobbies.values()]
+      .map((lobby) => {
+        const playerCount = lobby.playersById.size;
+        let connectedCount = 0;
+        for (const player of lobby.playersById.values()) {
+          if (player.isConnected) {
+            connectedCount += 1;
+          }
+        }
+
+        return {
+          lobbyId: lobby.lobbyId,
+          lobbyName: lobby.lobbyName,
+          phase: lobby.phase,
+          activeRoomId: lobby.activeRoomId,
+          selectedGameId: lobby.selectedGameId,
+          requiresPassword: lobby.passwordHash !== null,
+          maxPlayers: lobby.maxPlayers,
+          playerCount,
+          connectedCount,
+          isJoinable: lobby.phase === 'waiting' && playerCount < lobby.maxPlayers,
+          createdAtMs: lobby.createdAtMs,
+          updatedAtMs: lobby.updatedAtMs,
+        };
+      })
+      .sort((a, b) => a.lobbyId.localeCompare(b.lobbyId));
   }
 
   private requireLobby(lobbyId: string): LobbyState {

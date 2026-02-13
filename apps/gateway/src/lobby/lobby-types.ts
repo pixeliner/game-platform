@@ -1,5 +1,11 @@
 export type LobbyPhase = 'waiting' | 'starting' | 'in_game' | 'closed';
 
+export interface LobbyPasswordHash {
+  algorithm: 'scrypt_v1';
+  salt: string;
+  digest: string;
+}
+
 export interface LobbyPlayerState {
   playerId: string;
   guestId: string;
@@ -14,10 +20,13 @@ export interface LobbyPlayerState {
 
 export interface LobbyState {
   lobbyId: string;
+  lobbyName: string;
   hostPlayerId: string;
   phase: LobbyPhase;
   activeRoomId: string | null;
   selectedGameId: string | null;
+  maxPlayers: number;
+  passwordHash: LobbyPasswordHash | null;
   createdAtMs: number;
   updatedAtMs: number;
   playersById: Map<string, LobbyPlayerState>;
@@ -29,6 +38,9 @@ export interface CreateLobbyInput {
   playerId: string;
   guestId: string;
   nickname: string;
+  lobbyName: string;
+  maxPlayers: number;
+  passwordHash: LobbyPasswordHash | null;
   nowMs: number;
 }
 
@@ -75,10 +87,13 @@ export interface StartRequestResult {
 
 export interface LobbyView {
   lobbyId: string;
+  lobbyName: string;
   hostPlayerId: string;
   phase: LobbyPhase;
   activeRoomId: string | null;
   selectedGameId: string | null;
+  requiresPassword: boolean;
+  maxPlayers: number;
   players: Array<{
     playerId: string;
     guestId: string;
@@ -89,4 +104,19 @@ export interface LobbyView {
     isConnected: boolean;
   }>;
   votesByPlayerId: Record<string, string>;
+}
+
+export interface LobbyDiscoveryView {
+  lobbyId: string;
+  lobbyName: string;
+  phase: LobbyPhase;
+  activeRoomId: string | null;
+  selectedGameId: string | null;
+  requiresPassword: boolean;
+  maxPlayers: number;
+  playerCount: number;
+  connectedCount: number;
+  isJoinable: boolean;
+  createdAtMs: number;
+  updatedAtMs: number;
 }

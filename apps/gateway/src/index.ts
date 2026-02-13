@@ -1,3 +1,4 @@
+import { createLobbyPasswordService } from './auth/lobby-password-service.js';
 import { createSessionTokenService } from './auth/session-token-service.js';
 import { loadGatewayConfig, type GatewayConfig } from './config.js';
 import { SqliteMatchRepository, type MatchRepository } from '@game-platform/storage';
@@ -8,7 +9,7 @@ import {
 } from './gateway-server.js';
 import { LobbyStateMachine } from './lobby/lobby-state-machine.js';
 import { RoomManager } from './room/room-manager.js';
-import type { Clock, IdGenerator, SessionTokenService } from './types.js';
+import type { Clock, IdGenerator, LobbyPasswordService, SessionTokenService } from './types.js';
 import { createSystemClock } from './utils/clock.js';
 import { createIdGenerator } from './utils/id-generator.js';
 
@@ -22,6 +23,7 @@ export interface GatewayFactoryOptions {
   stateMachine?: LobbyStateMachine;
   roomManager?: RoomManager;
   sessionTokenService?: SessionTokenService;
+  lobbyPasswordService?: LobbyPasswordService;
   matchRepository?: MatchRepository;
 }
 
@@ -41,6 +43,9 @@ export function createGatewayServer(options: GatewayFactoryOptions = {}): Gatewa
       nowMs: () => clock.nowMs(),
       nextSessionId: () => idGenerator.next('sid'),
     });
+  const lobbyPasswordService =
+    options.lobbyPasswordService ??
+    createLobbyPasswordService();
   const matchRepository =
     options.matchRepository ??
     new SqliteMatchRepository({
@@ -54,6 +59,7 @@ export function createGatewayServer(options: GatewayFactoryOptions = {}): Gatewa
     stateMachine,
     roomManager,
     sessionTokenService,
+    lobbyPasswordService,
     matchRepository,
   };
 
