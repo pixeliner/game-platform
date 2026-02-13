@@ -160,7 +160,7 @@ class FakeMatchPersistenceService {
 }
 
 describe('RoomRuntimeManager', () => {
-  function setupHarness() {
+  function setupHarness(movementModel: 'grid_smooth' | 'true_transit' = 'grid_smooth') {
     const roomManager = new RoomManager({
       nextRoomId: () => 'room-1',
       nextSeed: () => 11,
@@ -182,6 +182,7 @@ describe('RoomRuntimeManager', () => {
       },
       matchPersistenceService,
       snapshotEveryTicks: 2,
+      bombermanMovementModel: movementModel,
       roomIdleTimeoutMs: 30_000,
       createScheduler: () => scheduler,
       setTimer: timers.setTimer,
@@ -300,6 +301,60 @@ describe('RoomRuntimeManager', () => {
     });
 
     harness.scheduler.advance(1);
+
+    const eventMessage = harness.transport.findByType('conn-1', 'game.event');
+    expect(eventMessage?.payload.event).toEqual({
+      kind: 'player.moved',
+      playerId: 'player-1',
+      from: {
+        x: 1,
+        y: 1,
+      },
+      to: {
+        x: 2,
+        y: 1,
+      },
+      direction: 'right',
+    });
+  });
+
+  it('applies configured true_transit movement model to bomberman runtime', () => {
+    const harness = setupHarness('true_transit');
+    harness.connectionRegistry.setContext({
+      connectionId: 'conn-1',
+      lobbyId: 'lobby-1',
+      playerId: 'player-1',
+      guestId: 'guest-1',
+      nickname: 'Host',
+    });
+
+    harness.manager.handleGameMessage('conn-1', {
+      v: 1,
+      type: 'game.join',
+      payload: {
+        roomId: harness.roomId,
+        playerId: 'player-1',
+      },
+    });
+
+    harness.manager.handleGameMessage('conn-1', {
+      v: 1,
+      type: 'game.input',
+      payload: {
+        roomId: harness.roomId,
+        playerId: 'player-1',
+        tick: 1,
+        input: {
+          kind: 'move.intent',
+          direction: 'right',
+        },
+      },
+    });
+
+    harness.scheduler.advance(1);
+    expect(harness.transport.findByType('conn-1', 'game.event')).toBeUndefined();
+
+    harness.scheduler.advance(3);
 
     const eventMessage = harness.transport.findByType('conn-1', 'game.event');
     expect(eventMessage?.payload.event).toEqual({

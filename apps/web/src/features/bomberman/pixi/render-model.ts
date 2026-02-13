@@ -19,6 +19,7 @@ export interface BombermanDrawInstruction {
   x: number;
   y: number;
   flipX: boolean;
+  flipY: boolean;
 }
 
 export interface BombermanRenderModel {
@@ -95,21 +96,78 @@ function pickPlayerSprite(palette: PlayerPalette, alive: boolean): BombermanSpri
   }
 }
 
-function pickFlameSprite(flameTiles: ReadonlySet<string>, x: number, y: number): BombermanSpriteKey {
+function pickBombSprite(fuseTicksRemaining: number): BombermanSpriteKey {
+  const sequence: readonly BombermanSpriteKey[] = [
+    'bomb.frame.1',
+    'bomb.frame.2',
+    'bomb.frame.3',
+    'bomb.frame.2',
+  ];
+  const cycleIndex = ((Math.floor(fuseTicksRemaining) - 1) % sequence.length + sequence.length) %
+    sequence.length;
+  return sequence[cycleIndex] ?? 'bomb.frame.1';
+}
+
+interface FlameSpriteSelection {
+  spriteKey: BombermanSpriteKey;
+  flipX: boolean;
+  flipY: boolean;
+}
+
+function pickFlameSprite(flameTiles: ReadonlySet<string>, x: number, y: number): FlameSpriteSelection {
   const hasLeft = flameTiles.has(`${x - 1},${y}`);
   const hasRight = flameTiles.has(`${x + 1},${y}`);
   const hasUp = flameTiles.has(`${x},${y - 1}`);
   const hasDown = flameTiles.has(`${x},${y + 1}`);
 
-  if ((hasLeft || hasRight) && !(hasUp || hasDown)) {
-    return 'flame.horizontal';
+  const horizontalNeighbors = (hasLeft ? 1 : 0) + (hasRight ? 1 : 0);
+  const verticalNeighbors = (hasUp ? 1 : 0) + (hasDown ? 1 : 0);
+
+  if (horizontalNeighbors > 0 && verticalNeighbors > 0) {
+    return {
+      spriteKey: 'flame.center',
+      flipX: false,
+      flipY: false,
+    };
   }
 
-  if ((hasUp || hasDown) && !(hasLeft || hasRight)) {
-    return 'flame.vertical';
+  if (horizontalNeighbors === 2) {
+    return {
+      spriteKey: 'flame.horizontal',
+      flipX: false,
+      flipY: false,
+    };
   }
 
-  return 'flame.center';
+  if (verticalNeighbors === 2) {
+    return {
+      spriteKey: 'flame.vertical',
+      flipX: false,
+      flipY: false,
+    };
+  }
+
+  if (horizontalNeighbors === 1 && verticalNeighbors === 0) {
+    return {
+      spriteKey: 'flame.horizontal.end',
+      flipX: hasRight,
+      flipY: false,
+    };
+  }
+
+  if (verticalNeighbors === 1 && horizontalNeighbors === 0) {
+    return {
+      spriteKey: 'flame.vertical.end',
+      flipX: false,
+      flipY: hasDown,
+    };
+  }
+
+  return {
+    spriteKey: 'flame.center',
+    flipX: false,
+    flipY: false,
+  };
 }
 
 export function buildBombermanRenderModel(snapshot: BombermanSnapshot): BombermanRenderModel {
@@ -126,6 +184,7 @@ export function buildBombermanRenderModel(snapshot: BombermanSnapshot): Bomberma
         x,
         y,
         flipX: false,
+        flipY: false,
       });
     }
   }
@@ -138,6 +197,7 @@ export function buildBombermanRenderModel(snapshot: BombermanSnapshot): Bomberma
       x: hardWall.x,
       y: hardWall.y,
       flipX: false,
+      flipY: false,
     });
   }
 
@@ -149,6 +209,7 @@ export function buildBombermanRenderModel(snapshot: BombermanSnapshot): Bomberma
       x: softBlock.x,
       y: softBlock.y,
       flipX: false,
+      flipY: false,
     });
   }
 
@@ -156,21 +217,25 @@ export function buildBombermanRenderModel(snapshot: BombermanSnapshot): Bomberma
     draws.push({
       id: `bomb-${bomb.ownerPlayerId}-${bomb.x}-${bomb.y}`,
       layer: 'bombs',
-      spriteKey: 'bomb.idle',
+      spriteKey: pickBombSprite(bomb.fuseTicksRemaining),
       x: bomb.x,
       y: bomb.y,
       flipX: false,
+      flipY: false,
     });
   }
 
   for (const flame of snapshot.flames) {
+    const flameSelection = pickFlameSprite(flameTiles, flame.x, flame.y);
+
     draws.push({
       id: `flame-${flame.x}-${flame.y}`,
       layer: 'flames',
-      spriteKey: pickFlameSprite(flameTiles, flame.x, flame.y),
+      spriteKey: flameSelection.spriteKey,
       x: flame.x,
       y: flame.y,
-      flipX: false,
+      flipX: flameSelection.flipX,
+      flipY: flameSelection.flipY,
     });
   }
 
@@ -184,6 +249,7 @@ export function buildBombermanRenderModel(snapshot: BombermanSnapshot): Bomberma
       x: player.x,
       y: player.y,
       flipX: player.direction === 'left',
+      flipY: false,
     });
   }
 

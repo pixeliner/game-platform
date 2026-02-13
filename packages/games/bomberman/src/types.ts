@@ -1,6 +1,7 @@
 export type BombermanPhase = 'running' | 'finished';
 
 export type BombermanDirection = 'up' | 'down' | 'left' | 'right';
+export type BombermanMovementModel = 'grid_smooth' | 'true_transit';
 
 export interface TilePosition {
   x: number;
@@ -9,6 +10,7 @@ export interface TilePosition {
 
 export interface BombermanConfig {
   playerIds: string[];
+  movementModel?: BombermanMovementModel;
 }
 
 export type BombermanInput =

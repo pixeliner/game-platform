@@ -6,10 +6,14 @@ export type BombermanSpriteKey =
   | 'tile.floor'
   | 'tile.wall.hard'
   | 'tile.wall.soft'
-  | 'bomb.idle'
+  | 'bomb.frame.1'
+  | 'bomb.frame.2'
+  | 'bomb.frame.3'
   | 'flame.center'
   | 'flame.horizontal'
   | 'flame.vertical'
+  | 'flame.horizontal.end'
+  | 'flame.vertical.end'
   | 'player.blue.idle'
   | 'player.red.idle'
   | 'player.yellow.idle'
@@ -42,10 +46,14 @@ export const BOMBERMAN_SPRITE_FRAMES: Readonly<Record<BombermanSpriteKey, Sprite
   'tile.wall.soft': frame(57, 254),
 
   // Core effects.
-  'bomb.idle': frame(260, 209),
-  'flame.center': frame(50, 171),
+  'bomb.frame.1': frame(6, 135),
+  'bomb.frame.2': frame(40, 135),
+  'bomb.frame.3': frame(77, 135),
+  'flame.center': frame(10, 171),
   'flame.horizontal': frame(90, 171),
-  'flame.vertical': frame(130, 171),
+  'flame.vertical': frame(57, 210),
+  'flame.horizontal.end': frame(130, 171),
+  'flame.vertical.end': frame(16, 210),
 
   // Player palettes.
   'player.blue.idle': frame(13, 561),

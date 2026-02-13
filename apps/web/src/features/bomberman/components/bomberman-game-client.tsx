@@ -50,6 +50,9 @@ export function BombermanGameClient(props: BombermanGameClientProps): React.JSX.
     }
 
     let disposed = false;
+    let tickerCallback:
+      | ((ticker: { deltaMS: number }) => void)
+      | null = null;
 
     const initialize = async (): Promise<void> => {
       const app = new Application();
@@ -73,6 +76,10 @@ export function BombermanGameClient(props: BombermanGameClientProps): React.JSX.
       const scene = await createPixiBombermanScene();
       sceneRef.current = scene;
       app.stage.addChild(scene.root);
+      tickerCallback = (ticker) => {
+        sceneRef.current?.advance(ticker.deltaMS);
+      };
+      app.ticker.add(tickerCallback);
 
       if (snapshot) {
         scene.update(snapshot);
@@ -83,6 +90,12 @@ export function BombermanGameClient(props: BombermanGameClientProps): React.JSX.
 
     return () => {
       disposed = true;
+
+      if (appRef.current && tickerCallback) {
+        appRef.current.ticker.remove(tickerCallback);
+        tickerCallback = null;
+      }
+
       sceneRef.current?.destroy();
       sceneRef.current = null;
 

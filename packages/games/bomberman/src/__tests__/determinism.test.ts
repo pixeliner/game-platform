@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { bombermanModule } from '../module.js';
-import type { BombermanInput, BombermanSnapshot } from '../types.js';
+import type {
+  BombermanInput,
+  BombermanMovementModel,
+  BombermanSnapshot,
+} from '../types.js';
 
 interface ScenarioOutput {
   snapshots: BombermanSnapshot[];
@@ -9,10 +13,11 @@ interface ScenarioOutput {
   results: ReturnType<ReturnType<typeof bombermanModule.createGame>['getResults']>;
 }
 
-function runScenario(seed: number): ScenarioOutput {
+function runScenario(seed: number, movementModel: BombermanMovementModel = 'grid_smooth'): ScenarioOutput {
   const game = bombermanModule.createGame(
     {
       playerIds: ['p1', 'p2'],
+      movementModel,
     },
     seed,
   );
@@ -54,6 +59,13 @@ describe('bomberman determinism', () => {
   it('produces identical snapshots/events/results for same seed and inputs', () => {
     const first = runScenario(12345);
     const second = runScenario(12345);
+
+    expect(second).toEqual(first);
+  });
+
+  it('is deterministic for true_transit movement model with the same seed and inputs', () => {
+    const first = runScenario(12345, 'true_transit');
+    const second = runScenario(12345, 'true_transit');
 
     expect(second).toEqual(first);
   });

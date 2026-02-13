@@ -61,11 +61,36 @@ describe('buildBombermanRenderModel', () => {
     const flameDrawById = new Map(
       model.draws
         .filter((draw) => draw.layer === 'flames')
+        .map((draw) => [draw.id, draw]),
+    );
+
+    expect(flameDrawById.get('flame-1-1')?.spriteKey).toBe('flame.horizontal');
+    expect(flameDrawById.get('flame-3-2')?.spriteKey).toBe('flame.vertical.end');
+    expect(flameDrawById.get('flame-3-2')?.flipX).toBe(false);
+    expect(flameDrawById.get('flame-3-2')?.flipY).toBe(false);
+  });
+
+  it('uses deterministic bomb pulse frames from fuse ticks', () => {
+    const snapshot = createSnapshot({
+      bombs: [
+        { ownerPlayerId: 'p1', x: 0, y: 0, fuseTicksRemaining: 40, radius: 2 },
+        { ownerPlayerId: 'p2', x: 1, y: 0, fuseTicksRemaining: 39, radius: 2 },
+        { ownerPlayerId: 'p3', x: 2, y: 0, fuseTicksRemaining: 38, radius: 2 },
+        { ownerPlayerId: 'p4', x: 3, y: 0, fuseTicksRemaining: 37, radius: 2 },
+      ],
+    });
+
+    const model = buildBombermanRenderModel(snapshot);
+    const bombDrawById = new Map(
+      model.draws
+        .filter((draw) => draw.layer === 'bombs')
         .map((draw) => [draw.id, draw.spriteKey]),
     );
 
-    expect(flameDrawById.get('flame-1-1')).toBe('flame.horizontal');
-    expect(flameDrawById.get('flame-3-2')).toBe('flame.vertical');
+    expect(bombDrawById.get('bomb-p1-0-0')).toBe('bomb.frame.2');
+    expect(bombDrawById.get('bomb-p2-1-0')).toBe('bomb.frame.3');
+    expect(bombDrawById.get('bomb-p3-2-0')).toBe('bomb.frame.2');
+    expect(bombDrawById.get('bomb-p4-3-0')).toBe('bomb.frame.1');
   });
 
   it('assigns deterministic player palettes by sorted player id and alive state', () => {

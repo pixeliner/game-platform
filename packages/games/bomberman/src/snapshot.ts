@@ -21,8 +21,8 @@ export function buildBombermanSnapshot(state: BombermanSimulationState): Bomberm
 
       return {
         playerId: player.playerId,
-        x: position.x,
-        y: position.y,
+        x: player.renderX,
+        y: player.renderY,
         alive: player.alive,
         direction: player.desiredDirection,
         activeBombCount: player.activeBombCount,

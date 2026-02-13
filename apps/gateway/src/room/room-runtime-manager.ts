@@ -8,6 +8,10 @@ import {
   type EngineRoomRuntime,
   type TickScheduler,
 } from '@game-platform/engine';
+import {
+  GAME_ID_BOMBERMAN,
+  type BombermanMovementModel,
+} from '@game-platform/game-bomberman';
 
 import { LobbyServiceError } from '../errors.js';
 import type {
@@ -37,6 +41,7 @@ interface RoomRuntimeManagerDependencies {
   clock: Clock;
   matchPersistenceService: MatchPersistenceService;
   snapshotEveryTicks: number;
+  bombermanMovementModel: BombermanMovementModel;
   roomIdleTimeoutMs: number;
   createScheduler?: () => TickScheduler;
   setTimer?: (fn: () => void, ms: number) => NodeJS.Timeout;
@@ -77,6 +82,7 @@ export class RoomRuntimeManager {
   private readonly clock: Clock;
   private readonly matchPersistenceService: MatchPersistenceService;
   private readonly snapshotEveryTicks: number;
+  private readonly bombermanMovementModel: BombermanMovementModel;
   private readonly roomIdleTimeoutMs: number;
   private readonly createScheduler: (() => TickScheduler) | undefined;
   private readonly setTimer: (fn: () => void, ms: number) => NodeJS.Timeout;
@@ -91,6 +97,7 @@ export class RoomRuntimeManager {
     this.clock = dependencies.clock;
     this.matchPersistenceService = dependencies.matchPersistenceService;
     this.snapshotEveryTicks = dependencies.snapshotEveryTicks;
+    this.bombermanMovementModel = dependencies.bombermanMovementModel;
     this.roomIdleTimeoutMs = dependencies.roomIdleTimeoutMs;
     this.createScheduler = dependencies.createScheduler;
     this.setTimer = dependencies.setTimer ?? setTimeout;
@@ -112,6 +119,15 @@ export class RoomRuntimeManager {
     }
 
     const scheduler = this.createScheduler?.();
+    const runtimeConfig =
+      room.gameId === GAME_ID_BOMBERMAN
+        ? {
+            playerIds: [...room.playerIds],
+            movementModel: this.bombermanMovementModel,
+          }
+        : {
+            playerIds: [...room.playerIds],
+          };
 
     const runtimeEntry: ActiveRoomRuntime = {
       room,
@@ -121,9 +137,7 @@ export class RoomRuntimeManager {
         seed: room.seed,
         tickRate: room.tickRate,
         snapshotEveryTicks: this.snapshotEveryTicks,
-        config: {
-          playerIds: [...room.playerIds],
-        },
+        config: runtimeConfig,
         module,
         ...(scheduler ? { scheduler } : {}),
         callbacks: {

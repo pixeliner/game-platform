@@ -165,6 +165,7 @@ export function createGatewayServer(options: CreateGatewayServerOptions): Gatewa
     clock: options.clock,
     matchPersistenceService: new MatchPersistenceService(options.matchRepository),
     snapshotEveryTicks: options.config.snapshotEveryTicks,
+    bombermanMovementModel: options.config.bombermanMovementModel,
     roomIdleTimeoutMs: options.config.roomIdleTimeoutMs,
   });
 

@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import type { BombermanMovementModel } from '@game-platform/game-bomberman';
 
 export interface GatewayConfig {
   host: string;
@@ -7,6 +8,7 @@ export interface GatewayConfig {
   reconnectGraceMs: number;
   tickRate: number;
   snapshotEveryTicks: number;
+  bombermanMovementModel: BombermanMovementModel;
   roomIdleTimeoutMs: number;
   sessionSecret: string;
   sqlitePath: string;
@@ -18,6 +20,7 @@ const DEFAULT_SESSION_TTL_MS = 900_000;
 const DEFAULT_RECONNECT_GRACE_MS = 120_000;
 const DEFAULT_TICK_RATE = 20;
 const DEFAULT_SNAPSHOT_EVERY_TICKS = 2;
+const DEFAULT_BOMBERMAN_MOVEMENT_MODEL = 'grid_smooth' satisfies BombermanMovementModel;
 const DEFAULT_ROOM_IDLE_TIMEOUT_MS = 30_000;
 const DEFAULT_SQLITE_PATH = './.data/game-platform.sqlite';
 
@@ -32,6 +35,20 @@ function readPositiveInt(name: string, rawValue: string | undefined, fallback: n
   }
 
   return parsed;
+}
+
+function readBombermanMovementModel(rawValue: string | undefined): BombermanMovementModel {
+  if (rawValue === undefined || rawValue.length === 0) {
+    return DEFAULT_BOMBERMAN_MOVEMENT_MODEL;
+  }
+
+  if (rawValue === 'grid_smooth' || rawValue === 'true_transit') {
+    return rawValue;
+  }
+
+  throw new Error(
+    `Invalid GATEWAY_BOMBERMAN_MOVEMENT_MODEL: expected grid_smooth or true_transit, received ${rawValue}`,
+  );
 }
 
 export function loadGatewayConfig(env: NodeJS.ProcessEnv = process.env): GatewayConfig {
@@ -50,6 +67,7 @@ export function loadGatewayConfig(env: NodeJS.ProcessEnv = process.env): Gateway
       env.GATEWAY_SNAPSHOT_EVERY_TICKS,
       DEFAULT_SNAPSHOT_EVERY_TICKS,
     ),
+    bombermanMovementModel: readBombermanMovementModel(env.GATEWAY_BOMBERMAN_MOVEMENT_MODEL),
     roomIdleTimeoutMs: readPositiveInt(
       'GATEWAY_ROOM_IDLE_TIMEOUT_MS',
       env.GATEWAY_ROOM_IDLE_TIMEOUT_MS,

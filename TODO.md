@@ -45,10 +45,33 @@
 - [x] Store match results + per-player stats
 - [x] Web: history + stats pages
 
-## Later
-- [ ] Powerups + destructible blocks variety
-- [ ] End screen with scoreboard
-- [ ] Reconnect support + late join spectators
-- [ ] Achievements and cosmetics
-- [ ] Lobby list and password protected lobbies
-- [ ] Debug system, host options/commands, monitoring system for admins
+## Milestone 8: Bomberman Gameplay Expansion
+- [ ] Add powerups (extra bombs, blast radius, speed)
+- [ ] Add advanced powerups (remote detonation, kick bombs, throw bombs)
+- [ ] Add destructible block variety and deterministic drop rules
+- [ ] Add balancing config + determinism/invariant tests
+
+## Milestone 9: Match UX & End Screen
+- [ ] Add end-of-round screen with scoreboard
+- [ ] Show ranking, score, and elimination timeline
+- [ ] Add post-match actions (back to lobby / rematch-ready flow)
+
+## Milestone 10: Reconnect + Spectators
+- [ ] Improve reconnect flow for active games (stateful rejoin UX)
+- [ ] Add late-join spectator mode for in-progress matches
+- [ ] Add gateway/web integration tests for reconnect and spectator flows
+
+## Milestone 11: Achievements & Cosmetics
+- [ ] Add achievement model + unlock triggers
+- [ ] Add cosmetics model + player selection UI
+- [ ] Persist and display achievements/cosmetics in profile/stats views
+
+## Milestone 12: Lobby Discovery & Access Control
+- [ ] Add lobby list endpoint + web lobby browser page
+- [ ] Add password-protected lobby creation/join flow
+- [ ] Add filters/sorting for discoverability and quick join
+
+## Milestone 13: Debug/Admin Tooling
+- [ ] Add debug command system for host/admin actions
+- [ ] Add host options and runtime controls (tick rate, start/stop, kick, etc.)
+- [ ] Add monitoring/diagnostics surface for admins

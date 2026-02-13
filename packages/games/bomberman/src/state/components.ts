@@ -13,6 +13,16 @@ export interface PlayerComponent {
   desiredDirection: BombermanDirection | null;
   queuedBombPlacement: boolean;
   moveCooldownTicks: number;
+  moveTicksPerTile: number;
+  renderX: number;
+  renderY: number;
+  segmentFromX: number;
+  segmentFromY: number;
+  segmentToX: number;
+  segmentToY: number;
+  segmentDurationTicks: number;
+  segmentElapsedTicks: number;
+  segmentActive: boolean;
   activeBombCount: number;
   eliminatedAtTick: number | null;
 }

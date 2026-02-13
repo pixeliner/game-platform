@@ -1,8 +1,13 @@
 import { EcsWorld, type EntityId, type GameEventEnvelope } from '@game-platform/engine';
 
-import { MAX_PLAYERS, MIN_PLAYERS, PLAYER_SPAWN_POSITIONS } from '../constants.js';
+import { MAX_PLAYERS, MIN_PLAYERS, MOVE_COOLDOWN_TICKS, PLAYER_SPAWN_POSITIONS } from '../constants.js';
 import { generateBombermanMap, type BombermanMapData } from '../map/generate-map.js';
-import type { BombermanConfig, BombermanEvent, BombermanPhase } from '../types.js';
+import type {
+  BombermanConfig,
+  BombermanEvent,
+  BombermanMovementModel,
+  BombermanPhase,
+} from '../types.js';
 import type { BombermanComponents, BombermanWorld } from './components.js';
 
 export type RoundOverReason = 'last_player_standing' | 'tick_limit';
@@ -12,11 +17,16 @@ export interface BombermanSimulationState {
   map: BombermanMapData;
   tick: number;
   phase: BombermanPhase;
+  movementModel: BombermanMovementModel;
   winnerPlayerId: string | null;
   roundOverReason: RoundOverReason | null;
   playerEntityIdsByPlayerId: Map<string, EntityId>;
   events: Array<GameEventEnvelope<BombermanEvent>>;
   nextEventId: number;
+}
+
+function resolveMovementModel(movementModel: BombermanConfig['movementModel']): BombermanMovementModel {
+  return movementModel === 'true_transit' ? 'true_transit' : 'grid_smooth';
 }
 
 function assertConfig(config: BombermanConfig): void {
@@ -40,6 +50,7 @@ export function createBombermanSimulationState(config: BombermanConfig, seed: nu
 
   const world = new EcsWorld<BombermanComponents>();
   const map = generateBombermanMap(seed, config.playerIds.length);
+  const movementModel = resolveMovementModel(config.movementModel);
 
   for (const softBlock of map.initialSoftBlockPositions) {
     const blockEntityId = world.createEntity();
@@ -71,6 +82,16 @@ export function createBombermanSimulationState(config: BombermanConfig, seed: nu
       desiredDirection: null,
       queuedBombPlacement: false,
       moveCooldownTicks: 0,
+      moveTicksPerTile: MOVE_COOLDOWN_TICKS,
+      renderX: spawn.x,
+      renderY: spawn.y,
+      segmentFromX: spawn.x,
+      segmentFromY: spawn.y,
+      segmentToX: spawn.x,
+      segmentToY: spawn.y,
+      segmentDurationTicks: MOVE_COOLDOWN_TICKS,
+      segmentElapsedTicks: 0,
+      segmentActive: false,
       activeBombCount: 0,
       eliminatedAtTick: null,
     });
@@ -83,6 +104,7 @@ export function createBombermanSimulationState(config: BombermanConfig, seed: nu
     map,
     tick: 0,
     phase: 'running',
+    movementModel,
     winnerPlayerId: null,
     roundOverReason: null,
     playerEntityIdsByPlayerId,
