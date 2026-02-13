@@ -11,7 +11,9 @@ import type { GatewayConfig } from './config.js';
 import type { LobbyStateMachine } from './lobby/lobby-state-machine.js';
 import { LobbyService } from './lobby/lobby-service.js';
 import { GatewayMessageRouter } from './message-router.js';
+import { createDefaultModuleRegistry } from './room/module-registry.js';
 import type { RoomManager } from './room/room-manager.js';
+import { RoomRuntimeManager } from './room/room-runtime-manager.js';
 import type {
   Clock,
   ConnectionRegistry,
@@ -137,10 +139,21 @@ export function createGatewayServer(options: CreateGatewayServerOptions): Gatewa
     },
   };
 
+  const roomRuntimeManager = new RoomRuntimeManager({
+    roomManager: options.roomManager,
+    moduleRegistry: createDefaultModuleRegistry(),
+    connectionRegistry,
+    transport,
+    clock: options.clock,
+    snapshotEveryTicks: options.config.snapshotEveryTicks,
+    roomIdleTimeoutMs: options.config.roomIdleTimeoutMs,
+  });
+
   const lobbyService = new LobbyService({
     stateMachine: options.stateMachine,
     roomManager: options.roomManager,
     sessionTokenService: options.sessionTokenService,
+    roomRuntimeManager,
     connectionRegistry,
     transport,
     idGenerator: options.idGenerator,
@@ -149,7 +162,7 @@ export function createGatewayServer(options: CreateGatewayServerOptions): Gatewa
     tickRate: options.config.tickRate,
   });
 
-  const router = new GatewayMessageRouter(lobbyService);
+  const router = new GatewayMessageRouter(lobbyService, roomRuntimeManager);
 
   webSocketServer.on('connection', (socket) => {
     const connectionId = options.idGenerator.next('conn');
@@ -173,11 +186,6 @@ export function createGatewayServer(options: CreateGatewayServerOptions): Gatewa
         return;
       }
 
-      if (decoded.value.type.startsWith('game.')) {
-        lobbyService.sendUnsupportedMessage(connectionId, decoded.value.type);
-        return;
-      }
-
       const clientMessageResult = clientMessageSchema.safeParse(decoded.value);
       if (!clientMessageResult.success) {
         lobbyService.sendInvalidMessage(connectionId, 'Only client message types are accepted.', {
@@ -190,6 +198,8 @@ export function createGatewayServer(options: CreateGatewayServerOptions): Gatewa
     });
 
     socket.on('close', () => {
+      const context = connectionRegistry.get(connectionId);
+      roomRuntimeManager.handleConnectionClosed(connectionId, context);
       lobbyService.handleDisconnect(connectionId);
       connections.delete(connectionId);
     });
@@ -208,6 +218,8 @@ export function createGatewayServer(options: CreateGatewayServerOptions): Gatewa
 
     stop(): Promise<void> {
       return new Promise((resolve, reject) => {
+        roomRuntimeManager.stopAll('server_shutdown');
+
         for (const connection of connections.values()) {
           connection.socket.close();
         }

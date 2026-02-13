@@ -6,6 +6,8 @@ export interface GatewayConfig {
   sessionTtlMs: number;
   reconnectGraceMs: number;
   tickRate: number;
+  snapshotEveryTicks: number;
+  roomIdleTimeoutMs: number;
   sessionSecret: string;
 }
 
@@ -14,6 +16,8 @@ const DEFAULT_PORT = 8787;
 const DEFAULT_SESSION_TTL_MS = 900_000;
 const DEFAULT_RECONNECT_GRACE_MS = 120_000;
 const DEFAULT_TICK_RATE = 20;
+const DEFAULT_SNAPSHOT_EVERY_TICKS = 2;
+const DEFAULT_ROOM_IDLE_TIMEOUT_MS = 30_000;
 
 function readPositiveInt(name: string, rawValue: string | undefined, fallback: number): number {
   if (!rawValue) {
@@ -39,6 +43,16 @@ export function loadGatewayConfig(env: NodeJS.ProcessEnv = process.env): Gateway
       DEFAULT_RECONNECT_GRACE_MS,
     ),
     tickRate: readPositiveInt('GATEWAY_TICK_RATE', env.GATEWAY_TICK_RATE, DEFAULT_TICK_RATE),
+    snapshotEveryTicks: readPositiveInt(
+      'GATEWAY_SNAPSHOT_EVERY_TICKS',
+      env.GATEWAY_SNAPSHOT_EVERY_TICKS,
+      DEFAULT_SNAPSHOT_EVERY_TICKS,
+    ),
+    roomIdleTimeoutMs: readPositiveInt(
+      'GATEWAY_ROOM_IDLE_TIMEOUT_MS',
+      env.GATEWAY_ROOM_IDLE_TIMEOUT_MS,
+      DEFAULT_ROOM_IDLE_TIMEOUT_MS,
+    ),
     sessionSecret: env.GATEWAY_SESSION_SECRET ?? randomBytes(32).toString('hex'),
   };
 }

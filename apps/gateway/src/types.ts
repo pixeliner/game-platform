@@ -1,9 +1,11 @@
 import type {
   ClientMessage,
+  GameClientMessage,
   LobbyClientMessage,
   LobbyServerMessage,
   ServerMessage,
 } from '@game-platform/protocol';
+import type { RoomRecord } from './room/room-manager.js';
 
 export interface GatewayConnectionContext {
   connectionId: string;
@@ -11,6 +13,7 @@ export interface GatewayConnectionContext {
   playerId?: string;
   guestId?: string;
   nickname?: string;
+  gameRoomId?: string | undefined;
 }
 
 export interface ConnectionRegistry {
@@ -52,6 +55,13 @@ export interface SessionTokenService {
 
 export interface MessageRouter {
   route(connectionId: string, message: ClientMessage): void;
+}
+
+export interface RoomRuntimeManager {
+  startRoomRuntime(room: RoomRecord): void;
+  handleGameMessage(connectionId: string, message: GameClientMessage): void;
+  handleConnectionClosed(connectionId: string, context?: GatewayConnectionContext): void;
+  stopAll(reason?: string): void;
 }
 
 export type LobbyMessageHandler = (connectionId: string, message: LobbyClientMessage) => void;

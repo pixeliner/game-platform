@@ -1,1 +1,1 @@
-export const GAME_ID_BOMBERMAN = 'bomberman';
+export * from './module.js';

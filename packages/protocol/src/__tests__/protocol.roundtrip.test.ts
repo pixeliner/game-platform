@@ -154,6 +154,17 @@ const validMessages: ProtocolMessage[] = [
   },
   {
     v: PROTOCOL_VERSION,
+    type: 'game.join.accepted',
+    payload: {
+      roomId: 'room-1',
+      gameId: 'bomberman',
+      playerId: 'player-1',
+      tick: 0,
+      joinedAtMs: 1700000000000,
+    },
+  },
+  {
+    v: PROTOCOL_VERSION,
     type: 'game.leave',
     payload: {
       roomId: 'room-1',
@@ -306,6 +317,27 @@ describe('protocol message codec', () => {
         playerId: 'player-1',
         guestId: 'guest-1',
         expiresAtMs: 1700000000000,
+      },
+    });
+
+    expect(() => decodeMessage(raw)).toThrow(ProtocolDecodeError);
+
+    const result = safeDecodeMessage(raw);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('invalid_message');
+    }
+  });
+
+  it('rejects malformed payload for game.join.accepted', () => {
+    const raw = JSON.stringify({
+      v: PROTOCOL_VERSION,
+      type: 'game.join.accepted',
+      payload: {
+        roomId: 'room-1',
+        gameId: 'bomberman',
+        playerId: 'player-1',
+        joinedAtMs: 1700000000000,
       },
     });
 

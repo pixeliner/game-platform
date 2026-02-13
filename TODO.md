@@ -18,10 +18,10 @@
 - [x] Basic auth: guest identity token (LAN)
 
 ## Milestone 3: Engine Runtime
-- [ ] packages/engine: tick loop fixed timestep
-- [ ] Input queue per player w/ validation
-- [ ] Snapshot broadcaster strategy (full snapshot per N ticks)
-- [ ] Engine tests
+- [x] packages/engine: tick loop fixed timestep
+- [x] Input queue per player w/ validation
+- [x] Snapshot broadcaster strategy (full snapshot per N ticks)
+- [x] Engine tests
 
 ## Milestone 4: Bomberman (Server Sim)
 - [ ] packages/games/bomberman: map + entities

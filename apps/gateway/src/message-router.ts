@@ -1,12 +1,15 @@
 import type { ClientMessage } from '@game-platform/protocol';
 
 import type { LobbyService } from './lobby/lobby-service.js';
+import type { RoomRuntimeManager } from './types.js';
 
 export class GatewayMessageRouter {
   private readonly lobbyService: LobbyService;
+  private readonly roomRuntimeManager: RoomRuntimeManager;
 
-  public constructor(lobbyService: LobbyService) {
+  public constructor(lobbyService: LobbyService, roomRuntimeManager: RoomRuntimeManager) {
     this.lobbyService = lobbyService;
+    this.roomRuntimeManager = roomRuntimeManager;
   }
 
   public route(connectionId: string, message: ClientMessage): void {
@@ -24,7 +27,7 @@ export class GatewayMessageRouter {
         case 'game.join':
         case 'game.leave':
         case 'game.input':
-          this.lobbyService.sendUnsupportedMessage(connectionId, message.type);
+          this.roomRuntimeManager.handleGameMessage(connectionId, message);
           return;
       }
     } catch (error) {

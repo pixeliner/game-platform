@@ -41,6 +41,12 @@ importers:
 
   apps/gateway:
     dependencies:
+      '@game-platform/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
+      '@game-platform/game-bomberman':
+        specifier: workspace:*
+        version: link:../../packages/games/bomberman
       '@game-platform/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
@@ -56,7 +62,11 @@ importers:
 
   packages/engine: {}
 
-  packages/games/bomberman: {}
+  packages/games/bomberman:
+    dependencies:
+      '@game-platform/engine':
+        specifier: workspace:*
+        version: link:../../engine
 
   packages/protocol:
     dependencies:

@@ -8,6 +8,8 @@ export interface RoomRecord {
   tickRate: number;
   createdAtMs: number;
   playerIds: string[];
+  status: 'active' | 'stopped';
+  stoppedAtMs?: number;
 }
 
 interface CreateRoomInput {
@@ -42,6 +44,7 @@ export class RoomManager {
       tickRate: input.tickRate,
       createdAtMs: input.createdAtMs,
       playerIds: [...input.playerIds],
+      status: 'active',
     };
 
     this.rooms.set(room.roomId, room);
@@ -54,5 +57,16 @@ export class RoomManager {
 
   public getRooms(): RoomRecord[] {
     return [...this.rooms.values()];
+  }
+
+  public markStopped(roomId: string, stoppedAtMs: number): RoomRecord | undefined {
+    const room = this.rooms.get(roomId);
+    if (!room) {
+      return undefined;
+    }
+
+    room.status = 'stopped';
+    room.stoppedAtMs = stoppedAtMs;
+    return room;
   }
 }

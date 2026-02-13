@@ -16,6 +16,7 @@ import type {
   ConnectionRegistry,
   GatewayTransport,
   IdGenerator,
+  RoomRuntimeManager,
   SessionTokenService,
 } from '../types.js';
 import type { LobbyStateMachine } from './lobby-state-machine.js';
@@ -25,6 +26,7 @@ interface LobbyServiceDependencies {
   stateMachine: LobbyStateMachine;
   roomManager: RoomManager;
   sessionTokenService: SessionTokenService;
+  roomRuntimeManager: RoomRuntimeManager;
   connectionRegistry: ConnectionRegistry;
   transport: GatewayTransport;
   idGenerator: IdGenerator;
@@ -47,6 +49,7 @@ export class LobbyService {
   private readonly stateMachine: LobbyStateMachine;
   private readonly roomManager: RoomManager;
   private readonly sessionTokenService: SessionTokenService;
+  private readonly roomRuntimeManager: RoomRuntimeManager;
   private readonly connectionRegistry: ConnectionRegistry;
   private readonly transport: GatewayTransport;
   private readonly idGenerator: IdGenerator;
@@ -61,6 +64,7 @@ export class LobbyService {
     this.stateMachine = dependencies.stateMachine;
     this.roomManager = dependencies.roomManager;
     this.sessionTokenService = dependencies.sessionTokenService;
+    this.roomRuntimeManager = dependencies.roomRuntimeManager;
     this.connectionRegistry = dependencies.connectionRegistry;
     this.transport = dependencies.transport;
     this.idGenerator = dependencies.idGenerator;
@@ -279,6 +283,7 @@ export class LobbyService {
       playerIds: connectedPlayerIds,
     });
 
+    this.roomRuntimeManager.startRoomRuntime(room);
     this.stateMachine.setInGame(lobby.lobbyId, nowMs);
 
     const startAccepted: LobbyServerMessage = {

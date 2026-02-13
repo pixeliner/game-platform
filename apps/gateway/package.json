@@ -6,13 +6,15 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "pnpm --filter @game-platform/protocol build && tsc -p tsconfig.json",
-    "typecheck": "pnpm --filter @game-platform/protocol build && tsc --noEmit -p tsconfig.json",
+    "build": "pnpm --filter @game-platform/protocol build && pnpm --filter @game-platform/engine build && pnpm --filter @game-platform/game-bomberman build && tsc -p tsconfig.json",
+    "typecheck": "pnpm --filter @game-platform/protocol build && pnpm --filter @game-platform/engine build && pnpm --filter @game-platform/game-bomberman build && tsc --noEmit -p tsconfig.json",
     "lint": "eslint \"src/**/*.ts\"",
     "test": "vitest run --config vitest.config.ts",
     "start": "node dist/main.js"
   },
   "dependencies": {
+    "@game-platform/engine": "workspace:*",
+    "@game-platform/game-bomberman": "workspace:*",
     "@game-platform/protocol": "workspace:*",
     "ws": "^8.18.1"
   },

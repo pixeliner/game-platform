@@ -17,6 +17,7 @@
 
 ### Game Session
 - game.join
+- game.join.accepted (server direct)
 - game.leave
 - game.input
 - game.snapshot

@@ -15,6 +15,18 @@ export const gameJoinMessageSchema = z.object({
   }),
 });
 
+export const gameJoinAcceptedMessageSchema = z.object({
+  v: z.literal(PROTOCOL_VERSION),
+  type: z.literal('game.join.accepted'),
+  payload: z.object({
+    roomId: roomIdSchema,
+    gameId: gameIdSchema,
+    playerId: idSchema,
+    tick: z.number().int().nonnegative(),
+    joinedAtMs: z.number().int().nonnegative(),
+  }),
+});
+
 export const gameLeaveMessageSchema = z.object({
   v: z.literal(PROTOCOL_VERSION),
   type: z.literal('game.leave'),
@@ -83,6 +95,7 @@ export const gameClientMessageSchemas = [
 ] as const;
 
 export const gameServerMessageSchemas = [
+  gameJoinAcceptedMessageSchema,
   gameSnapshotMessageSchema,
   gameEventMessageSchema,
   gameOverMessageSchema,
@@ -97,3 +110,11 @@ export const gameMessageSchema = z.discriminatedUnion('type', gameMessageSchemas
 export type GameClientMessage = z.infer<typeof gameClientMessageSchema>;
 export type GameServerMessage = z.infer<typeof gameServerMessageSchema>;
 export type GameMessage = z.infer<typeof gameMessageSchema>;
+
+export type GameJoinMessage = z.infer<typeof gameJoinMessageSchema>;
+export type GameJoinAcceptedMessage = z.infer<typeof gameJoinAcceptedMessageSchema>;
+export type GameLeaveMessage = z.infer<typeof gameLeaveMessageSchema>;
+export type GameInputMessage = z.infer<typeof gameInputMessageSchema>;
+export type GameSnapshotMessage = z.infer<typeof gameSnapshotMessageSchema>;
+export type GameEventMessage = z.infer<typeof gameEventMessageSchema>;
+export type GameOverMessage = z.infer<typeof gameOverMessageSchema>;
