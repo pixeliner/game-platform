@@ -26,6 +26,7 @@ const validMessages: ProtocolMessage[] = [
       lobbyId: 'lobby-1',
       guestId: 'guest-2',
       nickname: 'Bob',
+      sessionToken: 'token-1',
     },
   },
   {
@@ -83,6 +84,7 @@ const validMessages: ProtocolMessage[] = [
           isHost: true,
           isReady: true,
           voteGameId: 'bomberman',
+          isConnected: true,
         },
       ],
       votesByPlayerId: {
@@ -117,6 +119,17 @@ const validMessages: ProtocolMessage[] = [
       seed: 42,
       tickRate: 20,
       startedAtMs: 1700000000000,
+    },
+  },
+  {
+    v: PROTOCOL_VERSION,
+    type: 'lobby.auth.issued',
+    payload: {
+      lobbyId: 'lobby-1',
+      playerId: 'player-1',
+      guestId: 'guest-1',
+      sessionToken: 'token-abc',
+      expiresAtMs: 1700000009999,
     },
   },
   {
@@ -272,6 +285,27 @@ describe('protocol message codec', () => {
       payload: {
         lobbyId: 'lobby-1',
         nickname: 'Bob',
+      },
+    });
+
+    expect(() => decodeMessage(raw)).toThrow(ProtocolDecodeError);
+
+    const result = safeDecodeMessage(raw);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('invalid_message');
+    }
+  });
+
+  it('rejects malformed payload for lobby.auth.issued', () => {
+    const raw = JSON.stringify({
+      v: PROTOCOL_VERSION,
+      type: 'lobby.auth.issued',
+      payload: {
+        lobbyId: 'lobby-1',
+        playerId: 'player-1',
+        guestId: 'guest-1',
+        expiresAtMs: 1700000000000,
       },
     });
 

@@ -11,11 +11,11 @@
 - [x] Add protocol tests (roundtrip)
 
 ## Milestone 2: Gateway (Rooms)
-- [ ] apps/gateway: websocket server
-- [ ] Lobby lifecycle: create/join/leave
-- [ ] Chat, voting, ready states
-- [ ] Room manager: lobby -> game session creation
-- [ ] Basic auth: guest identity token (LAN)
+- [x] apps/gateway: websocket server
+- [x] Lobby lifecycle: create/join/leave
+- [x] Chat, voting, ready states
+- [x] Room manager: lobby -> game session creation
+- [x] Basic auth: guest identity token (LAN)
 
 ## Milestone 3: Engine Runtime
 - [ ] packages/engine: tick loop fixed timestep

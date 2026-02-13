@@ -12,6 +12,7 @@
 - lobby.ready.set
 - lobby.start.request
 - lobby.start.accepted (server)
+- lobby.auth.issued (server direct)
 - lobby.error
 
 ### Game Session
@@ -24,7 +25,9 @@
 
 ## Identity
 - Client generates guestId (uuid) and nickname
-- Gateway issues short-lived session token for ws reconnect (later)
+- Gateway issues short-lived session token for ws reconnect
+- `lobby.join` may include optional `sessionToken` for reconnect intent
+- `lobby.state.players[*]` includes `isConnected` for reconnect visibility
 
 ## Game Module Interface (packages/engine)
 - Each module must be deterministic given:

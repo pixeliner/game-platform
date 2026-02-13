@@ -11,6 +11,7 @@ export const LOBBY_MESSAGE_TYPES = [
   'lobby.ready.set',
   'lobby.start.request',
   'lobby.start.accepted',
+  'lobby.auth.issued',
   'lobby.error',
 ] as const;
 

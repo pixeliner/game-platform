@@ -16,6 +16,7 @@ const lobbyPlayerSchema = z.object({
   isHost: z.boolean(),
   isReady: z.boolean(),
   voteGameId: gameIdSchema.nullable(),
+  isConnected: z.boolean(),
 });
 
 const lobbyChatMessagePayloadSchema = z.object({
@@ -53,6 +54,7 @@ export const lobbyJoinMessageSchema = z.object({
     lobbyId: lobbyIdSchema,
     guestId: idSchema,
     nickname: nicknameSchema,
+    sessionToken: z.string().min(1).max(2048).optional(),
   }),
 });
 
@@ -130,6 +132,18 @@ export const lobbyStartAcceptedMessageSchema = z.object({
   }),
 });
 
+export const lobbyAuthIssuedMessageSchema = z.object({
+  v: z.literal(PROTOCOL_VERSION),
+  type: z.literal('lobby.auth.issued'),
+  payload: z.object({
+    lobbyId: lobbyIdSchema,
+    playerId: idSchema,
+    guestId: idSchema,
+    sessionToken: z.string().min(1).max(2048),
+    expiresAtMs: z.number().int().nonnegative(),
+  }),
+});
+
 export const lobbyErrorMessageSchema = z.object({
   v: z.literal(PROTOCOL_VERSION),
   type: z.literal('lobby.error'),
@@ -155,6 +169,7 @@ export const lobbyServerMessageSchemas = [
   lobbyChatMessageSchema,
   lobbyStateMessageSchema,
   lobbyStartAcceptedMessageSchema,
+  lobbyAuthIssuedMessageSchema,
   lobbyErrorMessageSchema,
 ] as const;
 
@@ -170,3 +185,16 @@ export const lobbyMessageSchema = z.discriminatedUnion('type', lobbyMessageSchem
 export type LobbyClientMessage = z.infer<typeof lobbyClientMessageSchema>;
 export type LobbyServerMessage = z.infer<typeof lobbyServerMessageSchema>;
 export type LobbyMessage = z.infer<typeof lobbyMessageSchema>;
+
+export type LobbyCreateMessage = z.infer<typeof lobbyCreateMessageSchema>;
+export type LobbyJoinMessage = z.infer<typeof lobbyJoinMessageSchema>;
+export type LobbyLeaveMessage = z.infer<typeof lobbyLeaveMessageSchema>;
+export type LobbyChatSendMessage = z.infer<typeof lobbyChatSendMessageSchema>;
+export type LobbyChatMessage = z.infer<typeof lobbyChatMessageSchema>;
+export type LobbyVoteCastMessage = z.infer<typeof lobbyVoteCastMessageSchema>;
+export type LobbyStateMessage = z.infer<typeof lobbyStateMessageSchema>;
+export type LobbyReadySetMessage = z.infer<typeof lobbyReadySetMessageSchema>;
+export type LobbyStartRequestMessage = z.infer<typeof lobbyStartRequestMessageSchema>;
+export type LobbyStartAcceptedMessage = z.infer<typeof lobbyStartAcceptedMessageSchema>;
+export type LobbyAuthIssuedMessage = z.infer<typeof lobbyAuthIssuedMessageSchema>;
+export type LobbyErrorMessage = z.infer<typeof lobbyErrorMessageSchema>;

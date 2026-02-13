@@ -11,7 +11,7 @@ interface ProtocolDecodeErrorOptions {
 
 export class ProtocolDecodeError extends Error {
   public readonly code: ProtocolDecodeErrorCode;
-  public readonly issues?: ZodIssue[];
+  public readonly issues: ZodIssue[] | undefined;
 
   public constructor(code: ProtocolDecodeErrorCode, message: string, options?: ProtocolDecodeErrorOptions) {
     super(message, { cause: options?.cause });

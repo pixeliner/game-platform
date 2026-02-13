@@ -1,0 +1,44 @@
+import { randomBytes } from 'node:crypto';
+
+export interface GatewayConfig {
+  host: string;
+  port: number;
+  sessionTtlMs: number;
+  reconnectGraceMs: number;
+  tickRate: number;
+  sessionSecret: string;
+}
+
+const DEFAULT_HOST = '0.0.0.0';
+const DEFAULT_PORT = 8787;
+const DEFAULT_SESSION_TTL_MS = 900_000;
+const DEFAULT_RECONNECT_GRACE_MS = 120_000;
+const DEFAULT_TICK_RATE = 20;
+
+function readPositiveInt(name: string, rawValue: string | undefined, fallback: number): number {
+  if (!rawValue) {
+    return fallback;
+  }
+
+  const parsed = Number.parseInt(rawValue, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`Invalid ${name}: expected positive integer, received ${rawValue}`);
+  }
+
+  return parsed;
+}
+
+export function loadGatewayConfig(env: NodeJS.ProcessEnv = process.env): GatewayConfig {
+  return {
+    host: env.GATEWAY_HOST ?? DEFAULT_HOST,
+    port: readPositiveInt('GATEWAY_PORT', env.GATEWAY_PORT, DEFAULT_PORT),
+    sessionTtlMs: readPositiveInt('GATEWAY_SESSION_TTL_MS', env.GATEWAY_SESSION_TTL_MS, DEFAULT_SESSION_TTL_MS),
+    reconnectGraceMs: readPositiveInt(
+      'GATEWAY_RECONNECT_GRACE_MS',
+      env.GATEWAY_RECONNECT_GRACE_MS,
+      DEFAULT_RECONNECT_GRACE_MS,
+    ),
+    tickRate: readPositiveInt('GATEWAY_TICK_RATE', env.GATEWAY_TICK_RATE, DEFAULT_TICK_RATE),
+    sessionSecret: env.GATEWAY_SESSION_SECRET ?? randomBytes(32).toString('hex'),
+  };
+}
