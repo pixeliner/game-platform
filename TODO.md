@@ -67,9 +67,9 @@
 - [ ] Persist and display achievements/cosmetics in profile/stats views
 
 ## Milestone 12: Lobby Discovery & Access Control
-- [ ] Add lobby list endpoint + web lobby browser page
-- [ ] Add password-protected lobby creation/join flow
-- [ ] Add filters/sorting for discoverability and quick join
+- [x] Add lobby list endpoint + web lobby browser page
+- [x] Add password-protected lobby creation/join flow
+- [x] Add filters/sorting for discoverability and quick join
 
 ## Milestone 13: Debug/Admin Tooling
 - [ ] Add debug command system for host/admin actions

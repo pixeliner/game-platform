@@ -60,8 +60,10 @@
 - Client generates guestId (uuid) and nickname
 - Gateway issues short-lived session token for ws reconnect
 - `lobby.join` may include optional `sessionToken` for reconnect intent
+- `lobby.create` and `lobby.join` may include optional `password` for protected lobbies
 - `lobby.state.players[*]` includes `isConnected` for reconnect visibility
 - `lobby.state.activeRoomId` indicates the currently active room while phase is `in_game`
+- `lobby.state` includes `lobbyName`, `requiresPassword`, and `maxPlayers`
 
 ## Spectators
 - Late join spectators can attach to active rooms using:
@@ -102,6 +104,23 @@ Gateway exposes read-only analytics endpoints:
 - `GET /api/leaderboard`
   - query: `limit` (default 20, max 100), `offset` (default 0), `gameId?`
   - response: `{ items, page }`
+
+## Lobby Discovery HTTP API
+Gateway exposes read-only lobby discovery endpoints:
+
+- `GET /api/lobbies`
+  - query:
+    - `limit` (default 20, max 100)
+    - `offset` (default 0)
+    - `phase?` (`waiting | starting | in_game | closed`)
+    - `gameId?`
+    - `access` (`all | open | protected`, default `all`)
+    - `search?` (matches `lobbyId` or `lobbyName`)
+    - `sort` (`updated_desc | created_desc | connected_desc | connected_asc`, default `updated_desc`)
+  - response: `{ items, page }`
+- `GET /api/lobbies/quick-join`
+  - query: `gameId?`
+  - response: `{ item }` where `item` is the best-fit open waiting lobby or `null`
 
 Ordering semantics:
 - history: `endedAtMs DESC`, then `matchId DESC`
